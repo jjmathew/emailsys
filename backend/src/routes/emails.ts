@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { fetchEmails, sendEmail, markAsRead, archiveEmail, trashEmail, reportSpam } from '../services/gmail';
-import { analyzeEmailBatch, generateReply } from '../services/ai';
+import { generateReply } from '../services/ai';
 
 const router = Router();
 
@@ -11,13 +11,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const oauth2Client = (req as any).oauth2Client;
 
     const emails = await fetchEmails(oauth2Client, maxResults);
-    const analyses = await analyzeEmailBatch(emails);
-
-    const analysisMap = new Map(analyses.map((a) => [a.emailId, a]));
 
     const enrichedEmails = emails.map((email) => ({
       ...email,
-      analysis: analysisMap.get(email.id) || null,
+      analysis: null,
     }));
 
     res.json({ emails: enrichedEmails });
