@@ -38,9 +38,11 @@ interface EmailDetailModalProps {
   email: Email;
   onClose: () => void;
   onMove: (emailId: string, category: string, dueDate?: string | null) => void;
+  onAddEmail: (email: Email) => void;
+  fromEmail: string;
 }
 
-export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalProps) {
+export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, fromEmail }: EmailDetailModalProps) {
   const [iframeHeight, setIframeHeight] = useState(300);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 
@@ -192,8 +194,32 @@ export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalPro
       {composeMode && (
         <ComposeModal
           onClose={() => setComposeMode(null)}
-          onTrackFollowUp={(dueDate) => {
-            onMove(email.id, 'Waiting for Follow-up', dueDate);
+          onTrackFollowUp={(sent, dueDate) => {
+            const id = `sent-${Date.now()}`;
+            const sentEmail: Email = {
+              id,
+              threadId: email.threadId,
+              subject: sent.subject,
+              from: fromEmail,
+              fromEmail,
+              fromName: 'Me',
+              to: sent.to,
+              date: new Date().toISOString(),
+              snippet: sent.body.slice(0, 120),
+              body: sent.body,
+              isRead: true,
+              labels: ['SENT'],
+              analysis: {
+                emailId: id,
+                category: 'Waiting for Follow-up',
+                priority: 'Medium',
+                actionTag: 'Needs Response',
+                suggestion: '',
+                dueDate: dueDate,
+                reasoning: '',
+              },
+            };
+            onAddEmail(sentEmail);
             onClose();
           }}
           {...composeProps()}

@@ -13,7 +13,7 @@ interface BoardPageProps {
 }
 
 export function BoardPage({ user, onLogout }: BoardPageProps) {
-  const { columns, loading, error, loadEmails, moveEmail, removeEmail } = useEmails();
+  const { columns, loading, error, loadEmails, moveEmail, removeEmail, addEmail } = useEmails();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('inbox');
   const [showCompose, setShowCompose] = useState(false);
@@ -166,6 +166,8 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
                 column={column}
                 onMoveEmail={handleMoveEmail}
                 onRemoveEmail={removeEmail}
+                onAddEmail={addEmail}
+                fromEmail={user.email}
               />
             ))}
           </div>

@@ -13,11 +13,13 @@ interface EmailCardProps {
   email: Email;
   onMove: (emailId: string, category: string, dueDate?: string | null) => void;
   onRemove: (emailId: string) => void;
+  onAddEmail: (email: Email) => void;
+  fromEmail: string;
 }
 
 type ComposeMode = 'reply' | 'replyAll' | 'forward';
 
-export function EmailCard({ email, onMove, onRemove }: EmailCardProps) {
+export function EmailCard({ email, onMove, onRemove, onAddEmail, fromEmail }: EmailCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
@@ -308,6 +310,8 @@ export function EmailCard({ email, onMove, onRemove }: EmailCardProps) {
           email={email}
           onClose={() => setShowDetail(false)}
           onMove={onMove}
+          onAddEmail={onAddEmail}
+          fromEmail={fromEmail}
         />
       )}
 

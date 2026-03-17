@@ -10,7 +10,7 @@ interface ComposeModalProps {
   defaultBody?: string;
   threadId?: string;
   title?: string;
-  onTrackFollowUp?: (dueDate: string | null) => void;
+  onTrackFollowUp?: (sent: { to: string; subject: string; body: string }, dueDate: string | null) => void;
 }
 
 export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', defaultBody = '', threadId, title = 'New Message', onTrackFollowUp }: ComposeModalProps) {
@@ -36,7 +36,7 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', def
         const isoDate = followUpDate
           ? new Date(followUpDate + 'T23:59:00').toISOString()
           : null;
-        onTrackFollowUp(isoDate);
+        onTrackFollowUp({ to, subject, body }, isoDate);
       }
       onClose();
     } catch {

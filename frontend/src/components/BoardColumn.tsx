@@ -6,9 +6,11 @@ interface BoardColumnProps {
   column: BoardColumnType;
   onMoveEmail: (emailId: string, category: string, dueDate?: string | null) => void;
   onRemoveEmail: (emailId: string) => void;
+  onAddEmail: (email: Email) => void;
+  fromEmail: string;
 }
 
-export function BoardColumn({ column, onMoveEmail, onRemoveEmail }: BoardColumnProps) {
+export function BoardColumn({ column, onMoveEmail, onRemoveEmail, onAddEmail, fromEmail }: BoardColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
 
   function handleDragOver(e: React.DragEvent) {
@@ -67,6 +69,8 @@ export function BoardColumn({ column, onMoveEmail, onRemoveEmail }: BoardColumnP
               email={email}
               onMove={onMoveEmail}
               onRemove={onRemoveEmail}
+              onAddEmail={onAddEmail}
+              fromEmail={fromEmail}
             />
           ))
         )}
