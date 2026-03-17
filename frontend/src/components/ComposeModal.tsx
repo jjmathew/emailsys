@@ -18,6 +18,7 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', def
   const [body, setBody] = useState(defaultBody);
   const [sending, setSending] = useState(false);
   const [trackFollowUp, setTrackFollowUp] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState('');
 
   const isReplyOrForward = title === 'Reply' || title === 'Reply All' || title === 'Forward';
 
@@ -112,16 +113,31 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', def
 
         {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={trackFollowUp}
-              onChange={(e) => setTrackFollowUp(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300"
-            />
-            <Flag className="w-4 h-4 text-gray-500" />
-            <span className="text-sm text-gray-700">Track for Follow-up</span>
-          </label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={trackFollowUp}
+                onChange={(e) => {
+                  setTrackFollowUp(e.target.checked);
+                  if (!e.target.checked) setFollowUpDate('');
+                }}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <Flag className="w-4 h-4 text-gray-500" />
+              <span className="text-sm text-gray-700">Track for Follow-up</span>
+            </label>
+            {trackFollowUp && (
+              <input
+                type="date"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                autoFocus
+              />
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
