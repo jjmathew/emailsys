@@ -41,32 +41,39 @@ Please analyze this email and respond with a JSON object containing exactly thes
   "reasoning": "Brief explanation of why you categorized it this way"
 }
 
-Categorization guidelines:
+## PERSONAL EMAIL RULE (highest priority — check this first)
+If the email is from a real person (has a personal name, non-system address) and is directly addressed to you personally (uses your name or "you", is conversational in tone, appears one-to-one or small-group), then:
+- Priority must be at LEAST "Medium" — never "Low" for personal emails
+- ActionTag should be "Needs Response" unless the content is purely informational with no expectation of reply
+- Category should be "Follow Up Today", "Follow Up Tomorrow", "Follow Up Later", or "Inbox" — NOT "FYI"
+- This rule applies even if the subject line contains words like "update", "announcement", etc.
+
+## Categorization guidelines:
 - "Follow Up Today": Urgent emails requiring same-day action
 - "Follow Up Tomorrow": Important emails that can wait until tomorrow
 - "Follow Up Later": Non-urgent emails needing future follow-up
-- "FYI": Informational emails requiring no action, including newsletters, announcements, and notifications
+- "FYI": Automated/bulk emails requiring no action — newsletters, system notifications, marketing, announcements sent to many people
 - "Waiting for Follow-up": Emails where you're waiting for someone else's response
 - "Inbox": Emails that need initial review/triage
 
-Priority guidelines:
-- High: Urgent deadlines, important clients, critical issues
-- Medium: Regular work items, moderate importance
-- Low: FYI updates, newsletters, low-stakes communications
+## Priority guidelines:
+- High: Urgent deadlines, important people you have relationships with, critical issues, direct questions or requests
+- Medium: Regular emails from real people, moderate importance, personal updates from known contacts
+- Low: ONLY for clearly automated/bulk emails — newsletters, system alerts, promotional content
 
-Action tag guidelines:
-- "Needs Response": Only for emails from real people that are directly addressed to you and require a reply
-- "FYI": Marketing emails, newsletters, automated notifications, mass mailings, promotional content, system alerts
+## Action tag guidelines:
+- "Needs Response": Emails from real people that are directly addressed to you and expect a reply
+- "FYI": Automated notifications, newsletters, mass mailings, promotional content, system alerts
 - "Delegate": Tasks better handled by someone else
 - "Schedule": Meeting requests or time-sensitive scheduling
 - "Archive": Completed threads, receipts, confirmations needing no action
 
-Marketing/automated email signals (use "FYI" tag and "Low" priority):
-- Sender is a no-reply address (e.g. noreply@, no-reply@, donotreply@)
-- Contains "unsubscribe" link
-- Subject contains words like: sale, offer, discount, newsletter, update, announcement, deal, promo
-- Bulk sender headers (List-Unsubscribe, Precedence: bulk/list)
-- Generic greeting (e.g. "Dear Customer", "Hi there") rather than your name
+## Marketing/automated email signals (MUST have MULTIPLE of these to classify as FYI/Low):
+- Sender is a no-reply address (noreply@, no-reply@, donotreply@) — this alone is sufficient
+- Contains "unsubscribe" link AND impersonal/generic greeting
+- Bulk sender headers (List-Unsubscribe, Precedence: bulk/list) AND no personal address
+- Generic greeting ("Dear Customer", "Hi there") AND mass-mailing indicators
+- Clearly promotional content (discounts, sales, offers) with no personal message
 
 Respond ONLY with the JSON object, no additional text.`;
 
