@@ -10,11 +10,13 @@ import toast from 'react-hot-toast';
 interface EmailDetailModalProps {
   email: Email;
   onClose: () => void;
-  onMove: (emailId: string, category: string) => void;
+  onMove: (emailId: string, category: string, dueDate?: string | null) => void;
 }
 
 export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalProps) {
   const [replyMode, setReplyMode] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [followUpLaterDate, setFollowUpLaterDate] = useState('');
   const [replyInstructions, setReplyInstructions] = useState('');
   const [generatedReply, setGeneratedReply] = useState('');
   const [replyBody, setReplyBody] = useState('');
@@ -184,16 +186,61 @@ export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalPro
             </button>
           </div>
 
-          <div className="flex gap-2">
-            <select
-              value={analysis?.category || 'Inbox'}
-              onChange={(e) => { onMove(email.id, e.target.value); onClose(); }}
-              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
-            >
-              {['Inbox', 'Follow Up Today', 'Follow Up Tomorrow', 'Follow Up Later', 'FYI', 'Waiting for Follow-up'].map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+          <div className="flex flex-col items-end gap-2">
+            {showDatePicker && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Due date:</span>
+                <input
+                  type="date"
+                  value={followUpLaterDate}
+                  onChange={(e) => setFollowUpLaterDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    const iso = followUpLaterDate ? new Date(followUpLaterDate + 'T23:59:00').toISOString() : null;
+                    onMove(email.id, 'Follow Up Later', iso);
+                    onClose();
+                  }}
+                  className="px-3 py-1 text-xs bg-brand-500 text-white rounded hover:bg-brand-600"
+                >
+                  Move
+                </button>
+                <button
+                  onClick={() => { setShowDatePicker(false); setFollowUpLaterDate(''); }}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            {!showDatePicker && (
+              <select
+                value={analysis?.category || 'Inbox'}
+                onChange={(e) => {
+                  const cat = e.target.value;
+                  if (cat === 'Follow Up Later') {
+                    setShowDatePicker(true);
+                    return;
+                  }
+                  let dueDate: string | null = null;
+                  if (cat === 'Follow Up Today') {
+                    const d = new Date(); d.setHours(23, 59, 0, 0); dueDate = d.toISOString();
+                  } else if (cat === 'Follow Up Tomorrow') {
+                    const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0); dueDate = d.toISOString();
+                  }
+                  onMove(email.id, cat, dueDate);
+                  onClose();
+                }}
+                className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+              >
+                {['Inbox', 'Follow Up Today', 'Follow Up Tomorrow', 'Follow Up Later', 'FYI', 'Waiting for Follow-up'].map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
       </div>

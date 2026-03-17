@@ -4,7 +4,7 @@ import { EmailCard } from './EmailCard';
 
 interface BoardColumnProps {
   column: BoardColumnType;
-  onMoveEmail: (emailId: string, category: string) => void;
+  onMoveEmail: (emailId: string, category: string, dueDate?: string | null) => void;
 }
 
 export function BoardColumn({ column, onMoveEmail }: BoardColumnProps) {

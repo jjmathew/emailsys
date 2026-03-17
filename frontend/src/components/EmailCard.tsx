@@ -8,13 +8,15 @@ import { EmailDetailModal } from './EmailDetailModal';
 
 interface EmailCardProps {
   email: Email;
-  onMove: (emailId: string, category: string) => void;
+  onMove: (emailId: string, category: string, dueDate?: string | null) => void;
 }
 
 export function EmailCard({ email, onMove }: EmailCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [followUpLaterPending, setFollowUpLaterPending] = useState(false);
+  const [followUpLaterDate, setFollowUpLaterDate] = useState('');
 
   const analysis = email.analysis;
   const dueDate = analysis?.dueDate ? formatDueDate(analysis.dueDate) : null;
@@ -28,6 +30,38 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
     'FYI',
     'Waiting for Follow-up',
   ];
+
+  function dueDateForCategory(cat: string): string | null {
+    if (cat === 'Follow Up Today') {
+      const d = new Date();
+      d.setHours(23, 59, 0, 0);
+      return d.toISOString();
+    }
+    if (cat === 'Follow Up Tomorrow') {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(23, 59, 0, 0);
+      return d.toISOString();
+    }
+    return null;
+  }
+
+  function handleMoveClick(cat: string) {
+    if (cat === 'Follow Up Later') {
+      setFollowUpLaterPending(true);
+      return;
+    }
+    onMove(email.id, cat, dueDateForCategory(cat));
+    setShowMoveMenu(false);
+  }
+
+  function confirmFollowUpLater() {
+    const iso = followUpLaterDate ? new Date(followUpLaterDate + 'T23:59:00').toISOString() : null;
+    onMove(email.id, 'Follow Up Later', iso);
+    setFollowUpLaterPending(false);
+    setFollowUpLaterDate('');
+    setShowMoveMenu(false);
+  }
 
   return (
     <>
@@ -65,25 +99,49 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
           {/* Move menu */}
           {showMoveMenu && (
             <div
-              className="absolute right-2 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-48"
+              className="absolute right-2 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-52"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Move to
               </div>
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMove(email.id, cat);
-                    setShowMoveMenu(false);
-                  }}
-                >
-                  {cat}
-                </button>
-              ))}
+              {!followUpLaterPending ? (
+                categories.map((cat) => (
+                  <button
+                    key={cat}
+                    className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                    onClick={(e) => { e.stopPropagation(); handleMoveClick(cat); }}
+                  >
+                    {cat}
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 space-y-2">
+                  <div className="text-xs text-gray-600 font-medium">Set due date for Follow Up Later</div>
+                  <input
+                    type="date"
+                    value={followUpLaterDate}
+                    onChange={(e) => setFollowUpLaterDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={confirmFollowUpLater}
+                      className="flex-1 px-2 py-1 text-xs bg-brand-500 text-white rounded hover:bg-brand-600"
+                    >
+                      Move
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFollowUpLaterPending(false); setFollowUpLaterDate(''); }}
+                      className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded text-gray-600 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

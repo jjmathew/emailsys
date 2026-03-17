@@ -23,15 +23,15 @@ export function useEmails() {
     }
   }, []);
 
-  const moveEmail = useCallback((emailId: string, targetCategory: Email['analysis'] extends null ? string : string) => {
+  const moveEmail = useCallback((emailId: string, targetCategory: string, dueDate?: string | null) => {
     setEmails((prev) => {
       const updated = prev.map((email) => {
         if (email.id === emailId) {
           return {
             ...email,
             analysis: email.analysis
-              ? { ...email.analysis, category: targetCategory as any }
-              : { emailId, category: targetCategory as any, priority: 'Medium' as any, actionTag: 'Needs Response' as any, suggestion: '', dueDate: null, reasoning: '' },
+              ? { ...email.analysis, category: targetCategory as any, dueDate: dueDate !== undefined ? dueDate : email.analysis.dueDate }
+              : { emailId, category: targetCategory as any, priority: 'Medium' as any, actionTag: 'Needs Response' as any, suggestion: '', dueDate: dueDate ?? null, reasoning: '' },
           };
         }
         return email;
