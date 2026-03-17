@@ -61,8 +61,7 @@ function extractBody(payload: any): string {
     }
     for (const part of payload.parts) {
       if (part.mimeType === 'text/html' && part.body?.data) {
-        const html = decodeBase64(part.body.data);
-        return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        return decodeBase64(part.body.data);
       }
       if (part.parts) {
         const nested = extractBody(part);
@@ -125,7 +124,7 @@ export async function fetchEmails(
         to: getHeader(headers, 'To'),
         date: getHeader(headers, 'Date'),
         snippet: detail.data.snippet || '',
-        body: body.substring(0, 2000),
+        body: body.substring(0, 100000),
         isRead: !(detail.data.labelIds || []).includes('UNREAD'),
         labels: detail.data.labelIds || [],
       } as EmailMessage;

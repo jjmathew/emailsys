@@ -7,6 +7,15 @@ import { X, Send, Lightbulb, Loader2, Reply } from 'lucide-react';
 import { generateReply, sendEmail } from '../utils/api';
 import toast from 'react-hot-toast';
 
+function isHtmlBody(body: string): boolean {
+  return /<(html|body|div|span|p|table|br|img|a)\b/i.test(body);
+}
+
+function wrapHtmlBody(html: string): string {
+  if (/^<!DOCTYPE|^<html/i.test(html.trim())) return html;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:#374151;line-height:1.6;padding:16px;margin:0;word-break:break-word;}img{max-width:100%;height:auto;}a{color:#6366f1;}</style></head><body>${html}</body></html>`;
+}
+
 interface EmailDetailModalProps {
   email: Email;
   onClose: () => void;
@@ -110,10 +119,29 @@ export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalPro
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 scrollbar-thin">
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {email.body || email.snippet}
-          </p>
+        <div className="flex-1 overflow-y-auto scrollbar-thin">
+          {isHtmlBody(email.body) ? (
+            <iframe
+              srcDoc={wrapHtmlBody(email.body)}
+              sandbox="allow-same-origin"
+              className="w-full border-0"
+              style={{ minHeight: '300px', height: '100%' }}
+              onLoad={(e) => {
+                const iframe = e.currentTarget;
+                try {
+                  const h = iframe.contentDocument?.documentElement?.scrollHeight;
+                  if (h) iframe.style.height = `${Math.min(h + 20, 600)}px`;
+                } catch { /* cross-origin guard */ }
+              }}
+              title="Email content"
+            />
+          ) : (
+            <div className="px-5 py-4">
+              <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                {email.body || email.snippet}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Reply section */}

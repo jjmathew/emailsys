@@ -126,6 +126,11 @@ export function EmailCard({ email, onMove, onRemove }: EmailCardProps) {
   return (
     <>
       <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('emailId', email.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
         className={`bg-white rounded-lg border ${
           analysis?.priority === 'High' ? 'border-orange-300' : 'border-gray-200'
         } shadow-sm hover:shadow-md transition-shadow cursor-pointer relative`}

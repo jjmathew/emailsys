@@ -18,6 +18,32 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
   const [activeSection, setActiveSection] = useState('inbox');
   const [showCompose, setShowCompose] = useState(false);
   const [filterText, setFilterText] = useState('');
+  const [followUpLaterPending, setFollowUpLaterPending] = useState<string | null>(null);
+  const [followUpLaterDate, setFollowUpLaterDate] = useState('');
+
+  function handleMoveEmail(emailId: string, category: string, dueDate?: string | null) {
+    // dueDate explicitly provided — move directly (from card menu or detail modal)
+    if (dueDate !== undefined) {
+      moveEmail(emailId, category, dueDate);
+      return;
+    }
+    // Auto-set dates for Today/Tomorrow when coming from drag-drop (no dueDate arg)
+    if (category === 'Follow Up Today') {
+      const d = new Date(); d.setHours(23, 59, 0, 0);
+      moveEmail(emailId, category, d.toISOString());
+      return;
+    }
+    if (category === 'Follow Up Tomorrow') {
+      const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(23, 59, 0, 0);
+      moveEmail(emailId, category, d.toISOString());
+      return;
+    }
+    if (category === 'Follow Up Later') {
+      setFollowUpLaterPending(emailId);
+      return;
+    }
+    moveEmail(emailId, category, null);
+  }
 
   useEffect(() => {
     loadEmails(30);
@@ -138,7 +164,7 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
               <BoardColumn
                 key={column.id}
                 column={column}
-                onMoveEmail={moveEmail}
+                onMoveEmail={handleMoveEmail}
                 onRemoveEmail={removeEmail}
               />
             ))}
@@ -147,6 +173,44 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
       </div>
 
       {showCompose && <ComposeModal onClose={() => setShowCompose(false)} />}
+
+      {/* Follow Up Later date picker modal */}
+      {followUpLaterPending && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+          onClick={() => { setFollowUpLaterPending(null); setFollowUpLaterDate(''); }}>
+          <div className="bg-white rounded-xl shadow-2xl p-5 w-80" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Set due date</h3>
+            <p className="text-xs text-gray-500 mb-3">When should you follow up on this email?</p>
+            <input
+              type="date"
+              value={followUpLaterDate}
+              onChange={(e) => setFollowUpLaterDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-3"
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setFollowUpLaterPending(null); setFollowUpLaterDate(''); }}
+                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const iso = followUpLaterDate ? new Date(followUpLaterDate + 'T23:59:00').toISOString() : null;
+                  moveEmail(followUpLaterPending!, 'Follow Up Later', iso);
+                  setFollowUpLaterPending(null);
+                  setFollowUpLaterDate('');
+                }}
+                className="px-4 py-1.5 bg-brand-500 text-white rounded-lg text-sm font-medium hover:bg-brand-600"
+              >
+                Move
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
