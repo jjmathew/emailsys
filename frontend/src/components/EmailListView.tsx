@@ -138,7 +138,7 @@ export function EmailListView({ emails, onMove, onRemove, onAddEmail, fromEmail 
               <th className="w-10 px-3 py-2.5" />
               <Th label="From"       col="from"       className="w-44" />
               <Th label="Category"   col="category"   className="w-44" />
-              <Th label="Subject"    col="subject"    className="" />
+              <Th label="Subject"    col="subject"    className="w-64" />
               <Th label="Due Date"   col="dueDate"    className="w-28" />
               <Th label="Priority"   col="priority"   className="w-24" />
               <Th label="Complexity" col="complexity" className="w-28" />
@@ -191,9 +191,9 @@ export function EmailListView({ emails, onMove, onRemove, onAddEmail, fromEmail 
                   </td>
 
                   {/* Subject + snippet */}
-                  <td className="px-3 py-3 min-w-0">
-                    <div className="flex items-baseline gap-2 min-w-0">
-                      <span className={`truncate flex-shrink-0 max-w-xs ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-800'}`}>
+                  <td className="px-3 py-3 max-w-[256px]">
+                    <div className="flex items-baseline gap-2 overflow-hidden">
+                      <span className={`truncate shrink-0 max-w-[10rem] ${isUnread ? 'font-semibold text-gray-900' : 'text-gray-800'}`}>
                         {email.subject}
                       </span>
                       <span className="truncate text-xs text-gray-400 min-w-0">
