@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Email, BoardColumn } from '../types';
-import { fetchEmails } from '../utils/api';
+import { fetchEmails, updateEmailMetadata } from '../utils/api';
 import { organizeEmailsIntoColumns } from '../utils/emailUtils';
 
 export function useEmails() {
@@ -39,6 +39,11 @@ export function useEmails() {
       setColumns(organizeEmailsIntoColumns(updated));
       return updated;
     });
+    // Persist to DB (fire-and-forget — local state is already updated)
+    updateEmailMetadata(emailId, {
+      category: targetCategory,
+      dueDate: dueDate ?? null,
+    }).catch(console.error);
   }, []);
 
   const removeEmail = useCallback((emailId: string) => {

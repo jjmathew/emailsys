@@ -13,6 +13,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const oauth2Client = createOAuth2Client();
   oauth2Client.setCredentials(tokens);
   (req as any).oauth2Client = oauth2Client as OAuth2Client;
+  (req as any).userId = (req.session as any).userProfile?.email ?? 'unknown';
 
   next();
 }

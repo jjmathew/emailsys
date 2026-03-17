@@ -45,6 +45,13 @@ export async function reportSpam(id: string): Promise<void> {
   await api.post(`/emails/${id}/spam`);
 }
 
+export async function updateEmailMetadata(
+  id: string,
+  data: { category?: string; priority?: string; dueDate?: string | null }
+): Promise<void> {
+  await api.post(`/emails/${id}/metadata`, data);
+}
+
 export async function generateReply(email: Email, instructions: string): Promise<string> {
   const response = await api.post('/ai/reply', { email, instructions });
   return response.data.reply;
