@@ -45,7 +45,7 @@ Categorization guidelines:
 - "Follow Up Today": Urgent emails requiring same-day action
 - "Follow Up Tomorrow": Important emails that can wait until tomorrow
 - "Follow Up Later": Non-urgent emails needing future follow-up
-- "FYI": Informational emails requiring no action
+- "FYI": Informational emails requiring no action, including newsletters, announcements, and notifications
 - "Waiting for Follow-up": Emails where you're waiting for someone else's response
 - "Inbox": Emails that need initial review/triage
 
@@ -53,6 +53,20 @@ Priority guidelines:
 - High: Urgent deadlines, important clients, critical issues
 - Medium: Regular work items, moderate importance
 - Low: FYI updates, newsletters, low-stakes communications
+
+Action tag guidelines:
+- "Needs Response": Only for emails from real people that are directly addressed to you and require a reply
+- "FYI": Marketing emails, newsletters, automated notifications, mass mailings, promotional content, system alerts
+- "Delegate": Tasks better handled by someone else
+- "Schedule": Meeting requests or time-sensitive scheduling
+- "Archive": Completed threads, receipts, confirmations needing no action
+
+Marketing/automated email signals (use "FYI" tag and "Low" priority):
+- Sender is a no-reply address (e.g. noreply@, no-reply@, donotreply@)
+- Contains "unsubscribe" link
+- Subject contains words like: sale, offer, discount, newsletter, update, announcement, deal, promo
+- Bulk sender headers (List-Unsubscribe, Precedence: bulk/list)
+- Generic greeting (e.g. "Dear Customer", "Hi there") rather than your name
 
 Respond ONLY with the JSON object, no additional text.`;
 
@@ -83,8 +97,8 @@ Respond ONLY with the JSON object, no additional text.`;
     return {
       emailId: email.id,
       category: 'Inbox',
-      priority: 'Medium',
-      actionTag: 'Needs Response',
+      priority: 'Low',
+      actionTag: 'FYI',
       suggestion: 'Review this email and determine the appropriate action.',
       dueDate: null,
       reasoning: 'Default categorization due to parsing error.',
@@ -98,8 +112,8 @@ export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAn
     emails.map((email) => analyzeEmail(email, currentDate).catch(() => ({
       emailId: email.id,
       category: 'Inbox' as EmailCategory,
-      priority: 'Medium' as Priority,
-      actionTag: 'Needs Response' as ActionTag,
+      priority: 'Low' as Priority,
+      actionTag: 'FYI' as ActionTag,
       suggestion: 'Review this email and determine the appropriate action.',
       dueDate: null,
       reasoning: 'Default categorization.',
