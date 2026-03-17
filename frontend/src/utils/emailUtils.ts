@@ -16,7 +16,8 @@ export function organizeEmailsIntoColumns(emails: Email[]): BoardColumn[] {
   }));
 
   for (const email of emails) {
-    const category = email.analysis?.category || 'Inbox';
+    const rawCategory = email.analysis?.category || 'Inbox';
+    const category = email.analysis?.actionTag === 'FYI' ? 'FYI' : rawCategory;
     const column = columns.find((c) => c.id === category);
     if (column) {
       column.emails.push(email);
