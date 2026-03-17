@@ -28,6 +28,25 @@ db.exec(`
   )
 `);
 
+// Stores synthetic "sent" emails created when tracking a reply for follow-up.
+// These never exist in Gmail so we persist the full content here.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS synthetic_emails (
+    user_id    TEXT NOT NULL,
+    email_id   TEXT NOT NULL,
+    thread_id  TEXT NOT NULL,
+    subject    TEXT NOT NULL,
+    to_addr    TEXT NOT NULL,
+    from_email TEXT NOT NULL,
+    from_name  TEXT NOT NULL,
+    date       TEXT NOT NULL,
+    snippet    TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, email_id)
+  )
+`);
+
 export interface EmailMetadata {
   category: string;
   priority: string | null;
@@ -89,4 +108,65 @@ export function upsertEmailMetadata(
 
 export function deleteEmailMetadata(userId: string, emailId: string): void {
   deleteStmt.run(userId, emailId);
+}
+
+export interface SyntheticEmailRecord {
+  emailId: string;
+  threadId: string;
+  subject: string;
+  toAddr: string;
+  fromEmail: string;
+  fromName: string;
+  date: string;
+  snippet: string;
+  body: string;
+}
+
+const upsertSyntheticStmt = db.prepare<[string, string, string, string, string, string, string, string, string, string]>(`
+  INSERT INTO synthetic_emails (user_id, email_id, thread_id, subject, to_addr, from_email, from_name, date, snippet, body, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  ON CONFLICT (user_id, email_id) DO UPDATE SET
+    thread_id  = excluded.thread_id,
+    subject    = excluded.subject,
+    to_addr    = excluded.to_addr,
+    from_email = excluded.from_email,
+    from_name  = excluded.from_name,
+    date       = excluded.date,
+    snippet    = excluded.snippet,
+    body       = excluded.body,
+    updated_at = excluded.updated_at
+`);
+
+const getSyntheticsStmt = db.prepare<[string]>(
+  'SELECT email_id, thread_id, subject, to_addr, from_email, from_name, date, snippet, body FROM synthetic_emails WHERE user_id = ?'
+);
+
+const deleteSyntheticStmt = db.prepare<[string, string]>(
+  'DELETE FROM synthetic_emails WHERE user_id = ? AND email_id = ?'
+);
+
+export function upsertSyntheticEmail(userId: string, data: SyntheticEmailRecord): void {
+  upsertSyntheticStmt.run(
+    userId, data.emailId, data.threadId, data.subject,
+    data.toAddr, data.fromEmail, data.fromName, data.date, data.snippet, data.body
+  );
+}
+
+export function getSyntheticEmails(userId: string): SyntheticEmailRecord[] {
+  const rows = getSyntheticsStmt.all(userId) as any[];
+  return rows.map((r) => ({
+    emailId: r.email_id,
+    threadId: r.thread_id,
+    subject: r.subject,
+    toAddr: r.to_addr,
+    fromEmail: r.from_email,
+    fromName: r.from_name,
+    date: r.date,
+    snippet: r.snippet,
+    body: r.body,
+  }));
+}
+
+export function deleteSyntheticEmail(userId: string, emailId: string): void {
+  deleteSyntheticStmt.run(userId, emailId);
 }

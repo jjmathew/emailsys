@@ -45,6 +45,22 @@ export async function reportSpam(id: string): Promise<void> {
   await api.post(`/emails/${id}/spam`);
 }
 
+export async function saveSyntheticEmail(data: {
+  emailId: string;
+  threadId: string;
+  subject: string;
+  toAddr: string;
+  fromEmail: string;
+  fromName: string;
+  date: string;
+  snippet: string;
+  body: string;
+  category: string;
+  dueDate?: string | null;
+}): Promise<void> {
+  await api.post('/emails/synthetic', data);
+}
+
 export async function updateEmailMetadata(
   id: string,
   data: { category?: string; priority?: string; dueDate?: string | null }

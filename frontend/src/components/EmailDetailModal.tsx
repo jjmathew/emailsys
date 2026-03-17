@@ -4,7 +4,7 @@ import { PriorityBadge, ActionTagBadge } from './PriorityBadge';
 import { formatEmailDate } from '../utils/emailUtils';
 import { X, Lightbulb, AlignJustify, Reply, ReplyAll, Forward } from 'lucide-react';
 import { ComposeModal } from './ComposeModal';
-import { archiveEmail } from '../utils/api';
+import { archiveEmail, saveSyntheticEmail } from '../utils/api';
 import toast from 'react-hot-toast';
 
 function isHtmlBody(body: string): boolean {
@@ -223,6 +223,20 @@ export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, 
               },
             };
             onAddEmail(sentEmail);
+            // Persist the synthetic email so it survives page reloads
+            saveSyntheticEmail({
+              emailId: id,
+              threadId: email.threadId,
+              subject: sent.subject,
+              toAddr: sent.to,
+              fromEmail: fromEmail,
+              fromName: 'Me',
+              date: sentEmail.date,
+              snippet: sentEmail.snippet,
+              body: sent.body,
+              category: 'Waiting for Follow-up',
+              dueDate: dueDate,
+            }).catch(() => toast.error('Could not save follow-up tracking'));
             // Archive the original — it's been replied to and tracked
             archiveEmail(email.id)
               .then(() => onRemove(email.id))
