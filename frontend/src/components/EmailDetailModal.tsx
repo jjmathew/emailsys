@@ -15,9 +15,14 @@ function wrapHtmlBody(html: string): string {
       var h=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight);
       window.parent.postMessage({type:'emailResize',height:h},'*');
     }
-    document.addEventListener('DOMContentLoaded',rh);
-    window.addEventListener('load',rh);
-    if(window.ResizeObserver)new ResizeObserver(rh).observe(document.body);
+    function openLinksInNewTab(){
+      document.querySelectorAll('a[href]').forEach(function(a){
+        a.setAttribute('target','_blank');
+        a.setAttribute('rel','noopener noreferrer');
+      });
+    }
+    document.addEventListener('DOMContentLoaded',function(){rh();openLinksInNewTab();});
+    window.addEventListener('load',function(){rh();openLinksInNewTab();});
   <\/script>`;
   if (/^<!DOCTYPE|^<html/i.test(html.trim())) {
     if (html.includes('</head>')) return html.replace('</head>', script + '</head>');
@@ -127,7 +132,7 @@ export function EmailDetailModal({ email, onClose, onMove: _onMove }: EmailDetai
               {isHtmlBody(email.body) ? (
                 <iframe
                   srcDoc={wrapHtmlBody(email.body)}
-                  sandbox="allow-same-origin allow-scripts"
+                  sandbox="allow-same-origin allow-scripts allow-popups"
                   className="w-full border-0 block"
                   style={{ height: `${iframeHeight}px`, minHeight: '200px' }}
                   onLoad={(e) => {
