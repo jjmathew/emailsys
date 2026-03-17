@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { User } from '../types';
 import { useEmails } from '../hooks/useEmails';
 import { BoardColumn } from '../components/BoardColumn';
+import { EmailListView } from '../components/EmailListView';
 import { Sidebar } from '../components/Sidebar';
 import { ComposeModal } from '../components/ComposeModal';
-import { Mail, Filter, Loader2, AlertCircle } from 'lucide-react';
+import { Mail, Filter, Loader2, AlertCircle, LayoutGrid, List } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface BoardPageProps {
@@ -13,13 +14,14 @@ interface BoardPageProps {
 }
 
 export function BoardPage({ user, onLogout }: BoardPageProps) {
-  const { columns, loading, error, loadEmails, moveEmail, removeEmail, addEmail } = useEmails();
+  const { emails, columns, loading, error, loadEmails, moveEmail, removeEmail, addEmail } = useEmails();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState('inbox');
   const [showCompose, setShowCompose] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [followUpLaterPending, setFollowUpLaterPending] = useState<string | null>(null);
   const [followUpLaterDate, setFollowUpLaterDate] = useState('');
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
 
   function handleMoveEmail(emailId: string, category: string, dueDate?: string | null) {
     // dueDate explicitly provided — move directly (from card menu or detail modal)
@@ -55,18 +57,19 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
     }
   }, [error]);
 
+  const filterFn = (e: { subject: string; fromName: string; fromEmail: string; snippet: string }) =>
+    !filterText ||
+    e.subject.toLowerCase().includes(filterText.toLowerCase()) ||
+    e.fromName.toLowerCase().includes(filterText.toLowerCase()) ||
+    e.fromEmail.toLowerCase().includes(filterText.toLowerCase()) ||
+    e.snippet.toLowerCase().includes(filterText.toLowerCase());
+
   const filteredColumns = columns.map((col) => ({
     ...col,
-    emails: filterText
-      ? col.emails.filter(
-          (e) =>
-            e.subject.toLowerCase().includes(filterText.toLowerCase()) ||
-            e.fromName.toLowerCase().includes(filterText.toLowerCase()) ||
-            e.fromEmail.toLowerCase().includes(filterText.toLowerCase()) ||
-            e.snippet.toLowerCase().includes(filterText.toLowerCase())
-        )
-      : col.emails,
+    emails: col.emails.filter(filterFn),
   }));
+
+  const filteredEmails = emails.filter(filterFn);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -114,6 +117,32 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
               Filter
             </button>
 
+            {/* View toggle */}
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode('board')}
+                title="Board view"
+                className={`flex items-center px-2.5 py-1.5 transition-colors ${
+                  viewMode === 'board'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                title="List view"
+                className={`flex items-center px-2.5 py-1.5 transition-colors border-l border-gray-200 ${
+                  viewMode === 'list'
+                    ? 'bg-brand-500 text-white'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* User menu */}
             <div className="relative group">
               <button className="flex items-center gap-2">
@@ -157,21 +186,31 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
           </div>
         )}
 
-        {/* Board */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-3 p-4 h-full" style={{ minWidth: 'max-content' }}>
-            {filteredColumns.map((column) => (
-              <BoardColumn
-                key={column.id}
-                column={column}
-                onMoveEmail={handleMoveEmail}
-                onRemoveEmail={removeEmail}
-                onAddEmail={addEmail}
-                fromEmail={user.email}
-              />
-            ))}
+        {/* Board / List */}
+        {viewMode === 'board' ? (
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex gap-3 p-4 h-full" style={{ minWidth: 'max-content' }}>
+              {filteredColumns.map((column) => (
+                <BoardColumn
+                  key={column.id}
+                  column={column}
+                  onMoveEmail={handleMoveEmail}
+                  onRemoveEmail={removeEmail}
+                  onAddEmail={addEmail}
+                  fromEmail={user.email}
+                />
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <EmailListView
+            emails={filteredEmails}
+            onMove={handleMoveEmail}
+            onRemove={removeEmail}
+            onAddEmail={addEmail}
+            fromEmail={user.email}
+          />
+        )}
       </div>
 
       {showCompose && <ComposeModal onClose={() => setShowCompose(false)} />}
