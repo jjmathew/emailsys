@@ -3,20 +3,27 @@ import { Email } from '../types';
 import { Avatar } from './Avatar';
 import { PriorityBadge, ActionTagBadge } from './PriorityBadge';
 import { formatEmailDate, formatDueDate } from '../utils/emailUtils';
-import { Lightbulb, Clock, MoreHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lightbulb, Clock, MoreHorizontal, ChevronDown, ChevronUp, Reply, Forward, Archive, Trash2, AlertOctagon, ArrowRight } from 'lucide-react';
 import { EmailDetailModal } from './EmailDetailModal';
+import { ComposeModal } from './ComposeModal';
+import { archiveEmail, trashEmail, reportSpam } from '../utils/api';
+import toast from 'react-hot-toast';
 
 interface EmailCardProps {
   email: Email;
   onMove: (emailId: string, category: string, dueDate?: string | null) => void;
+  onRemove: (emailId: string) => void;
 }
 
-export function EmailCard({ email, onMove }: EmailCardProps) {
+type ComposeMode = 'reply' | 'replyAll' | 'forward';
+
+export function EmailCard({ email, onMove, onRemove }: EmailCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [followUpLaterPending, setFollowUpLaterPending] = useState(false);
   const [followUpLaterDate, setFollowUpLaterDate] = useState('');
+  const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 
   const analysis = email.analysis;
   const dueDate = analysis?.dueDate ? formatDueDate(analysis.dueDate) : null;
@@ -63,6 +70,59 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
     setShowMoveMenu(false);
   }
 
+  async function handleArchive() {
+    setShowMoveMenu(false);
+    try {
+      await archiveEmail(email.id);
+      onRemove(email.id);
+      toast.success('Email archived');
+    } catch {
+      toast.error('Failed to archive email');
+    }
+  }
+
+  async function handleTrash() {
+    setShowMoveMenu(false);
+    try {
+      await trashEmail(email.id);
+      onRemove(email.id);
+      toast.success('Email deleted');
+    } catch {
+      toast.error('Failed to delete email');
+    }
+  }
+
+  async function handleSpam() {
+    setShowMoveMenu(false);
+    try {
+      await reportSpam(email.id);
+      onRemove(email.id);
+      toast.success('Reported as spam');
+    } catch {
+      toast.error('Failed to report spam');
+    }
+  }
+
+  function openCompose(mode: ComposeMode) {
+    setShowMoveMenu(false);
+    setComposeMode(mode);
+  }
+
+  function composeProps() {
+    const reSubject = email.subject.startsWith('Re:') ? email.subject : `Re: ${email.subject}`;
+    const fwdSubject = email.subject.startsWith('Fwd:') ? email.subject : `Fwd: ${email.subject}`;
+    const forwardBody = `\n\n-------- Forwarded Message --------\nFrom: ${email.from}\nSubject: ${email.subject}\n\n${email.body || email.snippet}`;
+
+    if (composeMode === 'reply') {
+      return { title: 'Reply', defaultTo: email.fromEmail, defaultSubject: reSubject, threadId: email.threadId };
+    }
+    if (composeMode === 'replyAll') {
+      const allTo = [email.fromEmail, ...email.to.split(',').map((s) => s.trim())].filter(Boolean).join(', ');
+      return { title: 'Reply All', defaultTo: allTo, defaultSubject: reSubject, threadId: email.threadId };
+    }
+    return { title: 'Forward', defaultTo: '', defaultSubject: fwdSubject, defaultBody: forwardBody };
+  }
+
   return (
     <>
       <div
@@ -90,31 +150,52 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMoveMenu(!showMoveMenu);
+                setFollowUpLaterPending(false);
+                setFollowUpLaterDate('');
               }}
             >
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
 
-          {/* Move menu */}
+          {/* Actions menu */}
           {showMoveMenu && (
             <div
               className="absolute right-2 top-8 z-10 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-52"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Move to
-              </div>
+              {/* Reply / Forward */}
+              <button className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                onClick={() => openCompose('reply')}>
+                <Reply className="w-3.5 h-3.5 text-gray-400" /> Reply
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                onClick={() => openCompose('replyAll')}>
+                <Reply className="w-3.5 h-3.5 text-gray-400" /> Reply All
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                onClick={() => openCompose('forward')}>
+                <Forward className="w-3.5 h-3.5 text-gray-400" /> Forward
+              </button>
+
+              <div className="border-t border-gray-100 my-1" />
+
+              {/* Move to */}
               {!followUpLaterPending ? (
-                categories.map((cat) => (
-                  <button
-                    key={cat}
-                    className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                    onClick={(e) => { e.stopPropagation(); handleMoveClick(cat); }}
-                  >
-                    {cat}
-                  </button>
-                ))
+                <>
+                  <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1">
+                    <ArrowRight className="w-3 h-3" /> Move to
+                  </div>
+                  {categories.map((cat) => (
+                    <button
+                      key={cat}
+                      className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 pl-6"
+                      onClick={(e) => { e.stopPropagation(); handleMoveClick(cat); }}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </>
               ) : (
                 <div className="px-3 py-2 space-y-2">
                   <div className="text-xs text-gray-600 font-medium">Set due date for Follow Up Later</div>
@@ -142,6 +223,22 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
                   </div>
                 </div>
               )}
+
+              <div className="border-t border-gray-100 my-1" />
+
+              {/* Destructive actions */}
+              <button className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                onClick={handleArchive}>
+                <Archive className="w-3.5 h-3.5 text-gray-400" /> Archive
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                onClick={handleTrash}>
+                <Trash2 className="w-3.5 h-3.5 text-red-400" /> Delete
+              </button>
+              <button className="w-full text-left px-3 py-1.5 text-xs text-orange-600 hover:bg-orange-50 flex items-center gap-2"
+                onClick={handleSpam}>
+                <AlertOctagon className="w-3.5 h-3.5 text-orange-400" /> Report spam
+              </button>
             </div>
           )}
 
@@ -206,6 +303,13 @@ export function EmailCard({ email, onMove }: EmailCardProps) {
           email={email}
           onClose={() => setShowDetail(false)}
           onMove={onMove}
+        />
+      )}
+
+      {composeMode && (
+        <ComposeModal
+          onClose={() => setComposeMode(null)}
+          {...composeProps()}
         />
       )}
     </>

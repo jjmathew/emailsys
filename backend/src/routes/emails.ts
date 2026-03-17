@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { fetchEmails, sendEmail, markAsRead } from '../services/gmail';
+import { fetchEmails, sendEmail, markAsRead, archiveEmail, trashEmail, reportSpam } from '../services/gmail';
 import { analyzeEmailBatch, generateReply } from '../services/ai';
 
 const router = Router();
@@ -54,6 +54,39 @@ router.post('/:id/read', requireAuth, async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error marking as read:', error);
     res.status(500).json({ error: error.message || 'Failed to mark as read' });
+  }
+});
+
+router.post('/:id/archive', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const oauth2Client = (req as any).oauth2Client;
+    await archiveEmail(oauth2Client, id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to archive email' });
+  }
+});
+
+router.post('/:id/trash', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const oauth2Client = (req as any).oauth2Client;
+    await trashEmail(oauth2Client, id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to delete email' });
+  }
+});
+
+router.post('/:id/spam', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const oauth2Client = (req as any).oauth2Client;
+    await reportSpam(oauth2Client, id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to report spam' });
   }
 });
 

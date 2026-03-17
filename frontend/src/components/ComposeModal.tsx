@@ -7,12 +7,15 @@ interface ComposeModalProps {
   onClose: () => void;
   defaultTo?: string;
   defaultSubject?: string;
+  defaultBody?: string;
+  threadId?: string;
+  title?: string;
 }
 
-export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '' }: ComposeModalProps) {
+export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', defaultBody = '', threadId, title = 'New Message' }: ComposeModalProps) {
   const [to, setTo] = useState(defaultTo);
   const [subject, setSubject] = useState(defaultSubject);
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(defaultBody);
   const [sending, setSending] = useState(false);
 
   async function handleSend() {
@@ -23,7 +26,7 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '' }: C
 
     setSending(true);
     try {
-      await sendEmail({ to, subject, body });
+      await sendEmail({ to, subject, body, threadId });
       toast.success('Email sent!');
       onClose();
     } catch {
@@ -41,7 +44,7 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '' }: C
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-800 rounded-t-xl">
-          <h3 className="text-sm font-semibold text-white">New Message</h3>
+          <h3 className="text-sm font-semibold text-white">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X className="w-4 h-4" />
           </button>

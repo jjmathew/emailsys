@@ -41,5 +41,13 @@ export function useEmails() {
     });
   }, []);
 
-  return { emails, columns, loading, error, loadEmails, moveEmail };
+  const removeEmail = useCallback((emailId: string) => {
+    setEmails((prev) => {
+      const updated = prev.filter((e) => e.id !== emailId);
+      setColumns(organizeEmailsIntoColumns(updated));
+      return updated;
+    });
+  }, []);
+
+  return { emails, columns, loading, error, loadEmails, moveEmail, removeEmail };
 }

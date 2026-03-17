@@ -33,6 +33,18 @@ export async function markEmailRead(id: string): Promise<void> {
   await api.post(`/emails/${id}/read`);
 }
 
+export async function archiveEmail(id: string): Promise<void> {
+  await api.post(`/emails/${id}/archive`);
+}
+
+export async function trashEmail(id: string): Promise<void> {
+  await api.post(`/emails/${id}/trash`);
+}
+
+export async function reportSpam(id: string): Promise<void> {
+  await api.post(`/emails/${id}/spam`);
+}
+
 export async function generateReply(email: Email, instructions: string): Promise<string> {
   const response = await api.post('/ai/reply', { email, instructions });
   return response.data.reply;

@@ -176,6 +176,29 @@ export async function markAsRead(oauth2Client: OAuth2Client, messageId: string):
   });
 }
 
+export async function archiveEmail(oauth2Client: OAuth2Client, messageId: string): Promise<void> {
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  await gmail.users.messages.modify({
+    userId: 'me',
+    id: messageId,
+    requestBody: { removeLabelIds: ['INBOX'] },
+  });
+}
+
+export async function trashEmail(oauth2Client: OAuth2Client, messageId: string): Promise<void> {
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  await gmail.users.messages.trash({ userId: 'me', id: messageId });
+}
+
+export async function reportSpam(oauth2Client: OAuth2Client, messageId: string): Promise<void> {
+  const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+  await gmail.users.messages.modify({
+    userId: 'me',
+    id: messageId,
+    requestBody: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
+  });
+}
+
 export async function getUserProfile(oauth2Client: OAuth2Client): Promise<{ email: string; name: string; picture: string }> {
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
   const response = await oauth2.userinfo.get();

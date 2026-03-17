@@ -5,9 +5,10 @@ import { EmailCard } from './EmailCard';
 interface BoardColumnProps {
   column: BoardColumnType;
   onMoveEmail: (emailId: string, category: string, dueDate?: string | null) => void;
+  onRemoveEmail: (emailId: string) => void;
 }
 
-export function BoardColumn({ column, onMoveEmail }: BoardColumnProps) {
+export function BoardColumn({ column, onMoveEmail, onRemoveEmail }: BoardColumnProps) {
   return (
     <div className="flex-shrink-0 w-72 flex flex-col bg-gray-100 rounded-xl">
       {/* Column header */}
@@ -30,6 +31,7 @@ export function BoardColumn({ column, onMoveEmail }: BoardColumnProps) {
               key={email.id}
               email={email}
               onMove={onMoveEmail}
+              onRemove={onRemoveEmail}
             />
           ))
         )}
