@@ -54,11 +54,7 @@ function extractBody(payload: any): string {
   }
 
   if (payload.parts) {
-    for (const part of payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
-        return decodeBase64(part.body.data);
-      }
-    }
+    // Prefer HTML over plain text for proper rendering
     for (const part of payload.parts) {
       if (part.mimeType === 'text/html' && part.body?.data) {
         return decodeBase64(part.body.data);
@@ -66,6 +62,11 @@ function extractBody(payload: any): string {
       if (part.parts) {
         const nested = extractBody(part);
         if (nested) return nested;
+      }
+    }
+    for (const part of payload.parts) {
+      if (part.mimeType === 'text/plain' && part.body?.data) {
+        return decodeBase64(part.body.data);
       }
     }
   }
