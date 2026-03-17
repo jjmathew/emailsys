@@ -10,9 +10,10 @@ interface ComposeModalProps {
   defaultBody?: string;
   threadId?: string;
   title?: string;
+  onTrackFollowUp?: (dueDate: string | null) => void;
 }
 
-export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', defaultBody = '', threadId, title = 'New Message' }: ComposeModalProps) {
+export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', defaultBody = '', threadId, title = 'New Message', onTrackFollowUp }: ComposeModalProps) {
   const [to, setTo] = useState(defaultTo);
   const [subject, setSubject] = useState(defaultSubject);
   const [body, setBody] = useState(defaultBody);
@@ -31,6 +32,12 @@ export function ComposeModal({ onClose, defaultTo = '', defaultSubject = '', def
     try {
       await sendEmail({ to, subject, body, threadId });
       toast.success('Email sent!');
+      if (trackFollowUp && onTrackFollowUp) {
+        const isoDate = followUpDate
+          ? new Date(followUpDate + 'T23:59:00').toISOString()
+          : null;
+        onTrackFollowUp(isoDate);
+      }
       onClose();
     } catch {
       toast.error('Failed to send email');

@@ -40,7 +40,7 @@ interface EmailDetailModalProps {
   onMove: (emailId: string, category: string, dueDate?: string | null) => void;
 }
 
-export function EmailDetailModal({ email, onClose, onMove: _onMove }: EmailDetailModalProps) {
+export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalProps) {
   const [iframeHeight, setIframeHeight] = useState(300);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 
@@ -192,6 +192,10 @@ export function EmailDetailModal({ email, onClose, onMove: _onMove }: EmailDetai
       {composeMode && (
         <ComposeModal
           onClose={() => setComposeMode(null)}
+          onTrackFollowUp={(dueDate) => {
+            onMove(email.id, 'Waiting for Follow-up', dueDate);
+            onClose();
+          }}
           {...composeProps()}
         />
       )}
