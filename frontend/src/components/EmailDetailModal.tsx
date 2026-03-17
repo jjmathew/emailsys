@@ -24,6 +24,7 @@ interface EmailDetailModalProps {
 
 export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalProps) {
   const [replyMode, setReplyMode] = useState(false);
+  const [iframeHeight, setIframeHeight] = useState(300);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [followUpLaterDate, setFollowUpLaterDate] = useState('');
   const [replyInstructions, setReplyInstructions] = useState('');
@@ -124,13 +125,13 @@ export function EmailDetailModal({ email, onClose, onMove }: EmailDetailModalPro
             <iframe
               srcDoc={wrapHtmlBody(email.body)}
               sandbox="allow-same-origin"
-              className="w-full border-0"
-              style={{ minHeight: '300px', height: '100%' }}
+              className="w-full border-0 block"
+              style={{ height: `${iframeHeight}px` }}
               onLoad={(e) => {
-                const iframe = e.currentTarget;
                 try {
-                  const h = iframe.contentDocument?.documentElement?.scrollHeight;
-                  if (h) iframe.style.height = `${Math.min(h + 20, 600)}px`;
+                  const doc = e.currentTarget.contentDocument;
+                  const h = doc?.documentElement?.scrollHeight || doc?.body?.scrollHeight || 0;
+                  if (h > 0) setIframeHeight(h + 24);
                 } catch { /* cross-origin guard */ }
               }}
               title="Email content"

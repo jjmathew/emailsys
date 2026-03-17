@@ -16,7 +16,10 @@ export function organizeEmailsIntoColumns(emails: Email[]): BoardColumn[] {
   }));
 
   for (const email of emails) {
-    const category = email.analysis?.category || 'Inbox';
+    const rawCategory = email.analysis?.category || 'Inbox';
+    // If the AI set actionTag=FYI but left category=Inbox, route to FYI column.
+    // Only applies when category is still 'Inbox' — manual moves to other columns are preserved.
+    const category = (rawCategory === 'Inbox' && email.analysis?.actionTag === 'FYI') ? 'FYI' : rawCategory;
     const column = columns.find((c) => c.id === category);
     if (column) {
       column.emails.push(email);
