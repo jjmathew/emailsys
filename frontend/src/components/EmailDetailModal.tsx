@@ -4,6 +4,8 @@ import { PriorityBadge, ActionTagBadge } from './PriorityBadge';
 import { formatEmailDate } from '../utils/emailUtils';
 import { X, Lightbulb, AlignJustify, Reply, ReplyAll, Forward } from 'lucide-react';
 import { ComposeModal } from './ComposeModal';
+import { archiveEmail } from '../utils/api';
+import toast from 'react-hot-toast';
 
 function isHtmlBody(body: string): boolean {
   return /<(html|body|div|span|p|table|br|img|a)\b/i.test(body);
@@ -39,10 +41,11 @@ interface EmailDetailModalProps {
   onClose: () => void;
   onMove: (emailId: string, category: string, dueDate?: string | null) => void;
   onAddEmail: (email: Email) => void;
+  onRemove: (emailId: string) => void;
   fromEmail: string;
 }
 
-export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, fromEmail }: EmailDetailModalProps) {
+export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, onRemove, fromEmail }: EmailDetailModalProps) {
   const [iframeHeight, setIframeHeight] = useState(300);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
 
@@ -220,6 +223,10 @@ export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, 
               },
             };
             onAddEmail(sentEmail);
+            // Archive the original — it's been replied to and tracked
+            archiveEmail(email.id)
+              .then(() => onRemove(email.id))
+              .catch(() => toast.error('Could not archive original email'));
             onClose();
           }}
           {...composeProps()}

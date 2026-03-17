@@ -310,6 +310,7 @@ export function EmailCard({ email, onMove, onRemove, onAddEmail, fromEmail }: Em
           email={email}
           onClose={() => setShowDetail(false)}
           onMove={onMove}
+          onRemove={onRemove}
           onAddEmail={onAddEmail}
           fromEmail={fromEmail}
         />
