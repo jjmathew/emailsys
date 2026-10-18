@@ -15,11 +15,19 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const emails = await fetchEmails(oauth2Client, maxResults);
     const metaMap = getBulkEmailMetadata(userId);
 
-    // Analyze emails that haven't been seen before, then persist so they're remembered
-    const newEmails = emails.filter((email) => !metaMap.has(email.id));
-    if (newEmails.length > 0) {
-      const analyses = await analyzeEmailBatch(newEmails);
+    // Analyze emails that haven't been AI-categorized yet (new, or previously failed/defaulted)
+    const needsAnalysis = emails.filter((email) => {
+      const meta = metaMap.get(email.id);
+      return !meta || !meta.aiAnalyzed;
+    });
+
+    if (needsAnalysis.length > 0) {
+      console.log(`[emails] AI analyzing ${needsAnalysis.length} email(s)...`);
+      const analyses = await analyzeEmailBatch(needsAnalysis);
+      let fyi = 0;
       for (const analysis of analyses) {
+        if (analysis.category === 'FYI') fyi++;
+        const succeeded = Boolean(analysis.suggestion);
         upsertEmailMetadata(userId, analysis.emailId, {
           category: analysis.category,
           priority: analysis.priority,
@@ -27,6 +35,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
           suggestion: analysis.suggestion,
           reasoning: analysis.reasoning,
           actionTag: analysis.actionTag,
+          aiAnalyzed: succeeded,
         });
         metaMap.set(analysis.emailId, {
           category: analysis.category,
@@ -35,8 +44,12 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
           suggestion: analysis.suggestion,
           reasoning: analysis.reasoning,
           actionTag: analysis.actionTag,
+          aiAnalyzed: succeeded,
         });
       }
+      console.log(`[emails] AI done — ${fyi} moved to FYI, ${analyses.length - fyi} other categories`);
+    } else {
+      console.log(`[emails] All ${emails.length} emails already AI-analyzed, using cached categories`);
     }
 
     const enrichedEmails = emails.map((email) => {
@@ -99,7 +112,8 @@ router.post('/:id/metadata', requireAuth, (req: Request, res: Response) => {
     const userId: string = (req as any).userId;
     const { category, priority, dueDate } = req.body;
 
-    upsertEmailMetadata(userId, id, { category, priority, dueDate });
+    // Mark as aiAnalyzed=true so manual moves are never overridden by AI on reload
+    upsertEmailMetadata(userId, id, { category, priority, dueDate, aiAnalyzed: true });
     res.json({ success: true });
   } catch (error: any) {
     console.error('Error saving metadata:', error);

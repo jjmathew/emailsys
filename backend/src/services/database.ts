@@ -29,9 +29,13 @@ db.exec(`
 `);
 
 // Migrate: add AI analysis columns if they don't exist yet
-try { db.exec(`ALTER TABLE email_metadata ADD COLUMN suggestion  TEXT NOT NULL DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE email_metadata ADD COLUMN reasoning   TEXT NOT NULL DEFAULT ''`); } catch {}
-try { db.exec(`ALTER TABLE email_metadata ADD COLUMN action_tag  TEXT NOT NULL DEFAULT 'Needs Response'`); } catch {}
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN suggestion   TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN reasoning    TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN action_tag   TEXT NOT NULL DEFAULT 'Needs Response'`); } catch {}
+// ai_analyzed = 1 means AI successfully categorized this email.
+// 0 means it defaulted (API error) or was set manually before AI ran.
+// We re-analyze any email where ai_analyzed = 0.
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN ai_analyzed  INTEGER NOT NULL DEFAULT 0`); } catch {}
 
 // Stores synthetic "sent" emails created when tracking a reply for follow-up.
 // These never exist in Gmail so we persist the full content here.
@@ -59,37 +63,51 @@ export interface EmailMetadata {
   suggestion: string;
   reasoning: string;
   actionTag: string;
+  aiAnalyzed: boolean;
 }
 
 const getStmt = db.prepare<[string, string]>(
-  'SELECT category, priority, due_date, suggestion, reasoning, action_tag FROM email_metadata WHERE user_id = ? AND email_id = ?'
+  'SELECT category, priority, due_date, suggestion, reasoning, action_tag, ai_analyzed FROM email_metadata WHERE user_id = ? AND email_id = ?'
 );
 
 const getBulkStmt = db.prepare<[string]>(
-  'SELECT email_id, category, priority, due_date, suggestion, reasoning, action_tag FROM email_metadata WHERE user_id = ?'
+  'SELECT email_id, category, priority, due_date, suggestion, reasoning, action_tag, ai_analyzed FROM email_metadata WHERE user_id = ?'
 );
 
-const upsertStmt = db.prepare<[string, string, string, string | null, string | null, string, string, string]>(`
-  INSERT INTO email_metadata (user_id, email_id, category, priority, due_date, suggestion, reasoning, action_tag, updated_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+const upsertStmt = db.prepare<[string, string, string, string | null, string | null, string, string, string, number]>(`
+  INSERT INTO email_metadata (user_id, email_id, category, priority, due_date, suggestion, reasoning, action_tag, ai_analyzed, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   ON CONFLICT (user_id, email_id) DO UPDATE SET
-    category   = excluded.category,
-    priority   = excluded.priority,
-    due_date   = excluded.due_date,
-    suggestion = excluded.suggestion,
-    reasoning  = excluded.reasoning,
-    action_tag = excluded.action_tag,
-    updated_at = excluded.updated_at
+    category    = excluded.category,
+    priority    = excluded.priority,
+    due_date    = excluded.due_date,
+    suggestion  = excluded.suggestion,
+    reasoning   = excluded.reasoning,
+    action_tag  = excluded.action_tag,
+    ai_analyzed = excluded.ai_analyzed,
+    updated_at  = excluded.updated_at
 `);
 
 const deleteStmt = db.prepare<[string, string]>(
   'DELETE FROM email_metadata WHERE user_id = ? AND email_id = ?'
 );
 
+function rowToMeta(row: any): EmailMetadata {
+  return {
+    category: row.category,
+    priority: row.priority,
+    dueDate: row.due_date,
+    suggestion: row.suggestion ?? '',
+    reasoning: row.reasoning ?? '',
+    actionTag: row.action_tag ?? 'Needs Response',
+    aiAnalyzed: row.ai_analyzed === 1,
+  };
+}
+
 export function getEmailMetadata(userId: string, emailId: string): EmailMetadata | null {
   const row = getStmt.get(userId, emailId) as any;
   if (!row) return null;
-  return { category: row.category, priority: row.priority, dueDate: row.due_date, suggestion: row.suggestion ?? '', reasoning: row.reasoning ?? '', actionTag: row.action_tag ?? 'Needs Response' };
+  return rowToMeta(row);
 }
 
 /** Returns a map of emailId → metadata for all emails belonging to this user. */
@@ -97,7 +115,7 @@ export function getBulkEmailMetadata(userId: string): Map<string, EmailMetadata>
   const rows = getBulkStmt.all(userId) as any[];
   const map = new Map<string, EmailMetadata>();
   for (const row of rows) {
-    map.set(row.email_id, { category: row.category, priority: row.priority, dueDate: row.due_date, suggestion: row.suggestion ?? '', reasoning: row.reasoning ?? '', actionTag: row.action_tag ?? 'Needs Response' });
+    map.set(row.email_id, rowToMeta(row));
   }
   return map;
 }
@@ -116,7 +134,9 @@ export function upsertEmailMetadata(
     data.dueDate !== undefined ? data.dueDate : (existing?.dueDate ?? null),
     data.suggestion !== undefined ? data.suggestion : (existing?.suggestion ?? ''),
     data.reasoning !== undefined ? data.reasoning : (existing?.reasoning ?? ''),
-    data.actionTag !== undefined ? data.actionTag : (existing?.actionTag ?? 'Needs Response')
+    data.actionTag !== undefined ? data.actionTag : (existing?.actionTag ?? 'Needs Response'),
+    // Preserve aiAnalyzed=true once set; only override if explicitly provided
+    data.aiAnalyzed !== undefined ? (data.aiAnalyzed ? 1 : 0) : (existing?.aiAnalyzed ? 1 : 0)
   );
 }
 

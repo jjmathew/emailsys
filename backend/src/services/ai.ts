@@ -79,11 +79,19 @@ Transactional email types:
 - "Schedule": Meeting requests or time-sensitive scheduling
 - "Archive": Transactional confirmations/receipts, completed threads — reviewed but no reply needed
 
-## Marketing/bulk signals (ALL required to classify as FYI — transactional emails are exempt even if they share some signals):
-- Clearly promotional content (sales, discounts, offers) with no personal message
-- Generic or missing greeting with mass-mailing indicators
-- Sent to a large undifferentiated audience (newsletter, marketing blast)
-- NOT triggered by any specific action you took
+## Newsletter / Marketing / Bulk email → ALWAYS classify as "FYI" (unless it's a transactional email from Rule 2)
+Any of the following signals is SUFFICIENT on its own to classify as "FYI":
+- Subject or body mentions "newsletter", "digest", "weekly update", "monthly update", "unsubscribe", "view in browser", "manage preferences", "opt out"
+- Promotional content: sales, discounts, coupons, offers, deals, promo codes, "% off", "limited time"
+- Sent by a company/brand to a mailing list (not addressed to you personally by name)
+- Library newsletters, community newsletters, school newsletters
+- Marketing emails from any brand, app, service, or retailer
+- "Curated for you", "picked for you", "recommended for you", "based on your interests" — these are algorithmic marketing, NOT personal
+- Course recommendations, product recommendations, feature announcements from a service
+- Re-engagement emails ("We miss you", "You haven't visited", "Come back")
+- Any email where the sender is a no-reply address or a marketing/newsletter alias
+
+NEVER classify as FYI: order confirmations, shipping updates, security alerts, billing receipts, appointment reminders, password resets (these are Rule 2 transactional).
 
 Respond ONLY with the JSON object, no additional text.`;
 
@@ -126,15 +134,18 @@ Respond ONLY with the JSON object, no additional text.`;
 export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAnalysis[]> {
   const currentDate = new Date().toISOString();
   const analyses = await Promise.all(
-    emails.map((email) => analyzeEmail(email, currentDate).catch(() => ({
-      emailId: email.id,
-      category: 'Inbox' as EmailCategory,
-      priority: 'Low' as Priority,
-      actionTag: 'FYI' as ActionTag,
-      suggestion: 'Review this email and determine the appropriate action.',
-      dueDate: null,
-      reasoning: 'Default categorization.',
-    })))
+    emails.map((email) => analyzeEmail(email, currentDate).catch((err) => {
+      console.error(`[ai] Failed to analyze email ${email.id} ("${email.subject}"): ${err?.message || err}`);
+      return {
+        emailId: email.id,
+        category: 'Inbox' as EmailCategory,
+        priority: 'Low' as Priority,
+        actionTag: 'FYI' as ActionTag,
+        suggestion: '',  // intentionally empty — signals "not successfully analyzed"
+        dueDate: null,
+        reasoning: '',
+      };
+    }))
   );
   return analyses;
 }
