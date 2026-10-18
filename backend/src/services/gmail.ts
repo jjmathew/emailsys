@@ -17,6 +17,7 @@ export function getAuthUrl(oauth2Client: OAuth2Client): string {
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/contacts.readonly',
   ];
 
   return oauth2Client.generateAuthUrl({
@@ -197,6 +198,42 @@ export async function reportSpam(oauth2Client: OAuth2Client, messageId: string):
     id: messageId,
     requestBody: { addLabelIds: ['SPAM'], removeLabelIds: ['INBOX'] },
   });
+}
+
+// In-memory cache: userId → { emails, expiry }
+const contactsCache = new Map<string, { emails: Set<string>; expiry: number }>();
+
+export async function fetchContactEmails(oauth2Client: OAuth2Client, userId: string): Promise<Set<string>> {
+  const cached = contactsCache.get(userId);
+  if (cached && Date.now() < cached.expiry) return cached.emails;
+
+  const emails = new Set<string>();
+  try {
+    const people = google.people({ version: 'v1', auth: oauth2Client });
+    let pageToken: string | undefined;
+    do {
+      const res: any = await people.people.connections.list({
+        resourceName: 'people/me',
+        pageSize: 1000,
+        personFields: 'emailAddresses',
+        ...(pageToken ? { pageToken } : {}),
+      });
+      for (const conn of res.data.connections || []) {
+        for (const e of conn.emailAddresses || []) {
+          if (e.value) emails.add(e.value.toLowerCase());
+        }
+      }
+      pageToken = res.data.nextPageToken;
+    } while (pageToken);
+
+    console.log(`[contacts] Loaded ${emails.size} contact emails for ${userId}`);
+  } catch (err: any) {
+    // Contacts scope not granted yet — gracefully degrade
+    console.warn(`[contacts] Could not fetch contacts (re-login to grant permission): ${err?.message}`);
+  }
+
+  contactsCache.set(userId, { emails, expiry: Date.now() + 60 * 60 * 1000 });
+  return emails;
 }
 
 export async function getUserProfile(oauth2Client: OAuth2Client): Promise<{ email: string; name: string; picture: string }> {

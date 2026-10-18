@@ -109,11 +109,24 @@ async function analyzeWithAnthropic(email: EmailMessage, currentDate: string): P
 
 // ── Local heuristics (zero cost, zero latency) ──────────────────────────────
 
-export function categorizeEmailLocally(email: EmailMessage): EmailAnalysis {
+export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<string>): EmailAnalysis {
   const subject   = (email.subject   || '').toLowerCase();
   const fromEmail = (email.fromEmail || '').toLowerCase();
   const snippet   = (email.snippet   || '').toLowerCase();
   const labels: string[] = email.labels || [];
+
+  // Contacts override — if the sender is in the user's Google Contacts, always Inbox
+  if (contactEmails && contactEmails.size > 0 && contactEmails.has(fromEmail)) {
+    return {
+      emailId: email.id,
+      category: 'Inbox',
+      priority: 'Medium',
+      actionTag: 'Needs Response',
+      suggestion: 'Email from one of your contacts — review and respond if needed.',
+      dueDate: null,
+      reasoning: 'Sender is in your Google Contacts.',
+    };
+  }
 
   const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
   const isUpdate    = labels.includes('CATEGORY_UPDATES');
@@ -173,7 +186,7 @@ export async function analyzeEmail(email: EmailMessage, currentDate: string = ne
   throw new Error('No LLM configured (set OLLAMA_MODEL or ANTHROPIC_API_KEY)');
 }
 
-export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAnalysis[]> {
+export async function analyzeEmailBatch(emails: EmailMessage[], contactEmails?: Set<string>): Promise<EmailAnalysis[]> {
   const currentDate = new Date().toISOString();
   const provider = useOllama() ? 'ollama' : useAnthropic() ? 'anthropic' : 'heuristics';
   console.log(`[ai] Using provider: ${provider}`);
@@ -183,7 +196,8 @@ export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAn
   const analyses = await Promise.all(
     emails.map(async (email) => {
       // Heuristics first — free and catches most newsletters before touching any LLM
-      const local = categorizeEmailLocally(email);
+      // Contacts are checked here too: contact emails always land in Inbox
+      const local = categorizeEmailLocally(email, contactEmails);
       if (local.category === 'FYI') return local;
 
       // Non-FYI: try LLM for richer analysis

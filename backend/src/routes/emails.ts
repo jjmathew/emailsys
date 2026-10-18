@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
-import { fetchEmails, sendEmail, markAsRead, archiveEmail, trashEmail, reportSpam } from '../services/gmail';
+import { fetchEmails, fetchContactEmails, sendEmail, markAsRead, archiveEmail, trashEmail, reportSpam } from '../services/gmail';
 import { generateReply, analyzeEmailBatch } from '../services/ai';
 import { getBulkEmailMetadata, upsertEmailMetadata, deleteEmailMetadata, upsertSyntheticEmail, getSyntheticEmails, deleteSyntheticEmail } from '../services/database';
 
@@ -12,7 +12,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const oauth2Client = (req as any).oauth2Client;
     const userId: string = (req as any).userId;
 
-    const emails = await fetchEmails(oauth2Client, maxResults);
+    const [emails, contactEmails] = await Promise.all([
+      fetchEmails(oauth2Client, maxResults),
+      fetchContactEmails(oauth2Client, userId),
+    ]);
     const metaMap = getBulkEmailMetadata(userId);
 
     // Analyze emails that haven't been AI-categorized yet (new, or previously failed/defaulted)
@@ -23,7 +26,7 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
 
     if (needsAnalysis.length > 0) {
       console.log(`[emails] AI analyzing ${needsAnalysis.length} email(s)...`);
-      const analyses = await analyzeEmailBatch(needsAnalysis);
+      const analyses = await analyzeEmailBatch(needsAnalysis, contactEmails);
       let fyi = 0;
       for (const analysis of analyses) {
         if (analysis.category === 'FYI') fyi++;
