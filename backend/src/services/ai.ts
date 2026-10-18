@@ -1,10 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { EmailMessage } from './gmail';
 
-const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
 export type EmailCategory = 'Follow Up Today' | 'Follow Up Tomorrow' | 'Follow Up Later' | 'FYI' | 'Waiting for Follow-up' | 'Inbox';
 export type Priority = 'High' | 'Medium' | 'Low';
 export type ActionTag = 'Needs Response' | 'FYI' | 'Delegate' | 'Schedule' | 'Archive';
@@ -19,148 +15,125 @@ export interface EmailAnalysis {
   reasoning: string;
 }
 
-export async function analyzeEmail(email: EmailMessage, currentDate: string = new Date().toISOString()): Promise<EmailAnalysis> {
-  const prompt = `You are an intelligent email assistant. Analyze the following email and provide structured categorization and action recommendations.
+const ANALYSIS_PROMPT = (email: EmailMessage, currentDate: string) => `You are an intelligent email assistant. Analyze the following email and provide structured categorization.
 
 Today's date: ${currentDate}
 
-Email Details:
 From: ${email.fromName} <${email.fromEmail}>
 Subject: ${email.subject}
 Date: ${email.date}
 Body:
-${email.body || email.snippet}
+${(email.body || email.snippet || '').substring(0, 3000)}
 
-Please analyze this email and respond with a JSON object containing exactly these fields:
+Respond with ONLY a JSON object — no extra text, no markdown fences:
 {
   "category": one of ["Follow Up Today", "Follow Up Tomorrow", "Follow Up Later", "FYI", "Waiting for Follow-up", "Inbox"],
   "priority": one of ["High", "Medium", "Low"],
   "actionTag": one of ["Needs Response", "FYI", "Delegate", "Schedule", "Archive"],
-  "suggestion": "A concise, actionable suggestion (1-2 sentences) for how to handle this email",
-  "dueDate": "ISO date string if there's a deadline, or null",
-  "reasoning": "Brief explanation of why you categorized it this way"
+  "suggestion": "1-2 sentence actionable suggestion",
+  "dueDate": "ISO date string or null",
+  "reasoning": "Brief explanation"
 }
 
-## RULE 1 — PERSONAL EMAIL (highest priority, check first)
-If the email is from a real person (personal name, non-system address) and is directly addressed to you (uses your name or "you", conversational tone, one-to-one or small-group), then:
-- Priority: NEVER "Low" — must be at least "Medium"
-- ActionTag: "Needs Response" unless purely informational with no expectation of reply
-- Category: "Follow Up Today", "Follow Up Tomorrow", "Follow Up Later", or "Inbox" — NEVER "FYI"
-- Applies even if the subject contains words like "update", "notification", "announcement"
+Rules:
+- Personal email from a real person → never FYI, at least Medium priority, actionTag Needs Response
+- Transactional email (order/shipping/security/billing) → Inbox, actionTag Archive
+- Newsletter / bulk / marketing / promotional → FYI, Low priority
+- FYI signals (any one is enough): Gmail Promotions tab, no-reply sender, "unsubscribe" in body, mass mailing, sale/deal/offer subject, "newsletter"/"digest" in subject`;
 
-## RULE 2 — TRANSACTIONAL EMAIL (second priority, check before applying FYI)
-Transactional emails are automated but personally relevant — they relate to YOUR specific actions or account. These must NEVER be categorized as "FYI". Treat them as "Inbox" with actionTag "Archive" (unless they require action, in which case use "Needs Response" or "Follow Up Today").
-Transactional email types:
-- Order confirmations, shipping notifications, delivery updates, tracking emails
-- Purchase receipts or invoices
-- Account security alerts (password changes, new sign-ins, 2FA)
-- Appointment confirmations or reminders
-- Flight/hotel/travel booking confirmations
-- Subscription renewals or billing notifications
-- Any email triggered by something YOU specifically did
+// ── Ollama ──────────────────────────────────────────────────────────────────
 
-## Categorization guidelines:
-- "Follow Up Today": Urgent emails requiring same-day action
-- "Follow Up Tomorrow": Important emails that can wait until tomorrow
-- "Follow Up Later": Non-urgent emails needing future follow-up
-- "FYI": ONLY for mass/bulk emails with NO personal relevance — newsletters sent to thousands, promotional blasts, generic announcements. NOT for transactional or personal emails.
-- "Waiting for Follow-up": Emails where you're waiting for someone else's response
-- "Inbox": Emails that need initial review/triage (including transactional emails)
+async function analyzeWithOllama(email: EmailMessage, currentDate: string): Promise<EmailAnalysis> {
+  const base = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+  const model = process.env.OLLAMA_MODEL || 'llama3.2';
 
-## Priority guidelines:
-- High: Urgent deadlines, important people, critical issues, direct questions or requests
-- Medium: Regular emails from real people, moderate importance, personal updates from known contacts, transactional emails requiring action
-- Low: ONLY for clearly mass-marketing/bulk emails — newsletters, promotional blasts with no personal relevance
+  const res = await fetch(`${base}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: ANALYSIS_PROMPT(email, currentDate) }],
+      stream: false,
+      format: 'json',
+    }),
+    signal: AbortSignal.timeout(30000),
+  });
 
-## Action tag guidelines:
-- "Needs Response": Emails from real people directly addressed to you expecting a reply
-- "FYI": ONLY mass newsletters, promotional blasts, generic announcements sent to many people — NOT transactional emails
-- "Delegate": Tasks better handled by someone else
-- "Schedule": Meeting requests or time-sensitive scheduling
-- "Archive": Transactional confirmations/receipts, completed threads — reviewed but no reply needed
+  if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
 
-## Newsletter / Marketing / Bulk email → ALWAYS classify as "FYI" (unless it's a transactional email from Rule 2)
-Any of the following signals is SUFFICIENT on its own to classify as "FYI":
-- Subject or body mentions "newsletter", "digest", "weekly update", "monthly update", "unsubscribe", "view in browser", "manage preferences", "opt out"
-- Promotional content: sales, discounts, coupons, offers, deals, promo codes, "% off", "limited time"
-- Sent by a company/brand to a mailing list (not addressed to you personally by name)
-- Library newsletters, community newsletters, school newsletters
-- Marketing emails from any brand, app, service, or retailer
-- "Curated for you", "picked for you", "recommended for you", "based on your interests" — these are algorithmic marketing, NOT personal
-- Course recommendations, product recommendations, feature announcements from a service
-- Re-engagement emails ("We miss you", "You haven't visited", "Come back")
-- Any email where the sender is a no-reply address or a marketing/newsletter alias
+  const data = await res.json() as any;
+  const text: string = data.message?.content || '';
+  const parsed = JSON.parse(text);
+  return {
+    emailId: email.id,
+    category: parsed.category,
+    priority: parsed.priority,
+    actionTag: parsed.actionTag,
+    suggestion: parsed.suggestion,
+    dueDate: parsed.dueDate ?? null,
+    reasoning: parsed.reasoning,
+  };
+}
 
-NEVER classify as FYI: order confirmations, shipping updates, security alerts, billing receipts, appointment reminders, password resets (these are Rule 2 transactional).
+// ── Anthropic ───────────────────────────────────────────────────────────────
 
-Respond ONLY with the JSON object, no additional text.`;
+let anthropicClient: Anthropic | null = null;
+function getAnthropicClient(): Anthropic {
+  if (!anthropicClient) {
+    anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  }
+  return anthropicClient;
+}
 
-  const response = await client.messages.create({
+async function analyzeWithAnthropic(email: EmailMessage, currentDate: string): Promise<EmailAnalysis> {
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 500,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content: ANALYSIS_PROMPT(email, currentDate) }],
   });
 
   const content = response.content[0];
-  if (content.type !== 'text') {
-    throw new Error('Unexpected response type from AI');
-  }
+  if (content.type !== 'text') throw new Error('Unexpected Anthropic response type');
 
-  try {
-    const analysis = JSON.parse(content.text);
-    return {
-      emailId: email.id,
-      category: analysis.category,
-      priority: analysis.priority,
-      actionTag: analysis.actionTag,
-      suggestion: analysis.suggestion,
-      dueDate: analysis.dueDate,
-      reasoning: analysis.reasoning,
-    };
-  } catch {
-    // Fallback if JSON parsing fails
-    return {
-      emailId: email.id,
-      category: 'Inbox',
-      priority: 'Low',
-      actionTag: 'FYI',
-      suggestion: 'Review this email and determine the appropriate action.',
-      dueDate: null,
-      reasoning: 'Default categorization due to parsing error.',
-    };
-  }
+  const parsed = JSON.parse(content.text);
+  return {
+    emailId: email.id,
+    category: parsed.category,
+    priority: parsed.priority,
+    actionTag: parsed.actionTag,
+    suggestion: parsed.suggestion,
+    dueDate: parsed.dueDate ?? null,
+    reasoning: parsed.reasoning,
+  };
 }
 
-/** Local, zero-cost categorizer using Gmail labels + subject/sender heuristics. */
+// ── Local heuristics (zero cost, zero latency) ──────────────────────────────
+
 export function categorizeEmailLocally(email: EmailMessage): EmailAnalysis {
-  const subject = (email.subject || '').toLowerCase();
+  const subject   = (email.subject   || '').toLowerCase();
   const fromEmail = (email.fromEmail || '').toLowerCase();
-  const snippet = (email.snippet || '').toLowerCase();
+  const snippet   = (email.snippet   || '').toLowerCase();
   const labels: string[] = email.labels || [];
 
-  // Gmail's own tab categorization — most reliable signal
   const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
   const isUpdate    = labels.includes('CATEGORY_UPDATES');
   const isSocial    = labels.includes('CATEGORY_SOCIAL');
   const isForums    = labels.includes('CATEGORY_FORUMS');
 
-  // Bulk/no-reply sender address patterns
-  const isNoReply = /no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|news@|updates@|alerts@|notifications@|info@|digest@|promo@|announce@/i.test(fromEmail);
+  const isNoReply = /no.?reply|noreply|donotreply|newsletter|marketing|news@|updates@|alerts@|notifications@|info@|digest@|promo@|announce@/i.test(fromEmail);
 
-  // Subject keywords indicating bulk mail
-  const isMarketingSubject = /newsletter|digest|unsubscribe|weekly update|monthly update|round.?up|sale|% off|\boff\b|deal|promo|coupon|limited.time|flash.sale|curated|picked.for.you|based.on.your|recommended.for.you|don.t miss|last.chance|today only|new arrivals|shop now|spring|summer|fall|winter|season/i.test(subject);
+  const isMarketingSubject = /newsletter|digest|unsubscribe|weekly update|monthly update|round.?up|% off|deal|promo|coupon|limited.time|flash.sale|curated|picked.for.you|recommended.for.you|don.t miss|last.chance|new arrivals|shop now/i.test(subject);
 
-  // Body/snippet signals
-  const isMarketingSnippet = /unsubscribe|manage.*preferences|view.*browser|opt.out|manage.*subscription|update.*preferences/i.test(snippet);
+  const isMarketingSnippet = /unsubscribe|manage.*preferences|view.*browser|opt.out|manage.*subscription/i.test(snippet);
 
   const reasons: string[] = [];
-  if (isPromotion)         reasons.push('Gmail: Promotions tab');
-  if (isUpdate)            reasons.push('Gmail: Updates tab');
-  if (isSocial)            reasons.push('Gmail: Social tab');
-  if (isForums)            reasons.push('Gmail: Forums tab');
-  if (isNoReply)           reasons.push('bulk/no-reply sender');
-  if (isMarketingSubject)  reasons.push('marketing subject keywords');
-  if (isMarketingSnippet)  reasons.push('contains unsubscribe/preference link');
+  if (isPromotion)        reasons.push('Gmail: Promotions tab');
+  if (isUpdate)           reasons.push('Gmail: Updates tab');
+  if (isSocial)           reasons.push('Gmail: Social tab');
+  if (isForums)           reasons.push('Gmail: Forums tab');
+  if (isNoReply)          reasons.push('bulk/no-reply sender');
+  if (isMarketingSubject) reasons.push('marketing subject keywords');
+  if (isMarketingSnippet) reasons.push('contains unsubscribe link');
 
   if (reasons.length > 0) {
     return {
@@ -185,79 +158,126 @@ export function categorizeEmailLocally(email: EmailMessage): EmailAnalysis {
   };
 }
 
+// ── Public API ───────────────────────────────────────────────────────────────
+
+const useOllama  = () => Boolean(process.env.OLLAMA_MODEL || process.env.OLLAMA_BASE_URL);
+const useAnthropic = () => Boolean(process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_anthropic_api_key');
+
+export async function analyzeEmail(email: EmailMessage, currentDate: string = new Date().toISOString()): Promise<EmailAnalysis> {
+  if (useOllama()) {
+    return analyzeWithOllama(email, currentDate);
+  }
+  if (useAnthropic()) {
+    return analyzeWithAnthropic(email, currentDate);
+  }
+  throw new Error('No LLM configured (set OLLAMA_MODEL or ANTHROPIC_API_KEY)');
+}
+
 export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAnalysis[]> {
   const currentDate = new Date().toISOString();
+  const provider = useOllama() ? 'ollama' : useAnthropic() ? 'anthropic' : 'heuristics';
+  console.log(`[ai] Using provider: ${provider}`);
+
+  let billingErrorLogged = false;
+
   const analyses = await Promise.all(
     emails.map(async (email) => {
-      // Always run local heuristics first — free and instant
+      // Heuristics first — free and catches most newsletters before touching any LLM
       const local = categorizeEmailLocally(email);
+      if (local.category === 'FYI') return local;
 
-      // If already identified as FYI locally, skip the AI call entirely
-      if (local.category === 'FYI') {
-        return local;
-      }
+      // Non-FYI: try LLM for richer analysis
+      if (provider === 'heuristics') return local;
 
-      // For non-FYI emails, try AI for richer categorization and suggestions
       try {
         return await analyzeEmail(email, currentDate);
       } catch (err: any) {
         const msg: string = err?.message || String(err);
-        // On billing/credit errors log once; other errors log the full message
         if (msg.includes('credit balance') || msg.includes('billing')) {
-          console.error(`[ai] API billing error — falling back to heuristics for all remaining emails`);
+          if (!billingErrorLogged) {
+            console.error('[ai] Anthropic billing error — falling back to heuristics. Top up credits at console.anthropic.com');
+            billingErrorLogged = true;
+          }
         } else {
-          console.error(`[ai] Failed to analyze email ${email.id} ("${email.subject}"): ${msg}`);
+          console.error(`[ai] Failed on "${email.subject}": ${msg}`);
         }
-        return local; // heuristic result is still useful
+        return local;
       }
     })
   );
   return analyses;
 }
 
-export async function generateReply(
-  email: EmailMessage,
-  instructions: string
-): Promise<string> {
-  const prompt = `You are an intelligent email assistant. Generate a professional email reply based on the original email and the user's instructions.
+export async function generateReply(email: EmailMessage, instructions: string): Promise<string> {
+  const prompt = `Generate a professional email reply.
 
-Original Email:
+Original email:
 From: ${email.fromName} <${email.fromEmail}>
 Subject: ${email.subject}
-Body:
-${email.body || email.snippet}
+Body: ${email.body || email.snippet}
 
-User's instructions for the reply: ${instructions}
+Instructions: ${instructions}
 
-Write a professional, concise email reply. Start directly with the greeting, do not include subject line or headers. Keep it natural and human-sounding.`;
+Write only the reply body, starting with the greeting. No subject line or headers.`;
 
-  const response = await client.messages.create({
+  if (useOllama()) {
+    const base = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+    const model = process.env.OLLAMA_MODEL || 'llama3.2';
+    const res = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    const data = await res.json() as any;
+    return data.message?.content || '';
+  }
+
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1000,
     messages: [{ role: 'user', content: prompt }],
   });
-
   const content = response.content[0];
-  if (content.type !== 'text') {
-    throw new Error('Unexpected response type from AI');
-  }
-
+  if (content.type !== 'text') throw new Error('Unexpected response type');
   return content.text;
 }
 
 export async function summarizeEmail(email: EmailMessage): Promise<string> {
-  const prompt = `Summarize this email in 2-3 sentences, focusing on the key information and any required actions:
+  const prompt = `Summarize this email in 2-3 sentences, focusing on key info and required actions:
 
 From: ${email.fromName}
 Subject: ${email.subject}
 Body: ${email.body || email.snippet}`;
 
-  const response = await client.messages.create({
+  if (useOllama()) {
+    const base = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/$/, '');
+    const model = process.env.OLLAMA_MODEL || 'llama3.2';
+    const res = await fetch(`${base}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return email.snippet;
+    const data = await res.json() as any;
+    return data.message?.content || email.snippet;
+  }
+
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 200,
     messages: [{ role: 'user', content: prompt }],
   });
-
   const content = response.content[0];
   if (content.type !== 'text') return email.snippet;
   return content.text;
