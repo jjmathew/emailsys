@@ -22,6 +22,7 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
   const [followUpLaterPending, setFollowUpLaterPending] = useState<string | null>(null);
   const [followUpLaterDate, setFollowUpLaterDate] = useState('');
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+  const [maxResults, setMaxResults] = useState(100);
 
   function handleMoveEmail(emailId: string, category: string, dueDate?: string | null) {
     // dueDate explicitly provided — move directly (from card menu or detail modal)
@@ -48,7 +49,7 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
   }
 
   useEffect(() => {
-    loadEmails(30);
+    loadEmails(maxResults);
   }, [loadEmails]);
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
         user={user}
         activeSection={activeSection}
         onSectionChange={setActiveSection}
-        onRefresh={() => loadEmails(30)}
+        onRefresh={() => loadEmails(maxResults)}
         loading={loading}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -112,6 +113,23 @@ export function BoardPage({ user, onLogout }: BoardPageProps) {
                 </button>
               )}
             </div>
+            {/* Email count selector */}
+            <select
+              value={maxResults}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                setMaxResults(n);
+                loadEmails(n);
+              }}
+              className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500 text-gray-600"
+              title="Number of emails to load"
+            >
+              <option value={50}>50 emails</option>
+              <option value={100}>100 emails</option>
+              <option value={200}>200 emails</option>
+              <option value={500}>500 emails</option>
+            </select>
+
             <button className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
               <Filter className="w-3.5 h-3.5" />
               Filter

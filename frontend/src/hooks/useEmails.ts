@@ -9,7 +9,7 @@ export function useEmails() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadEmails = useCallback(async (maxResults = 30) => {
+  const loadEmails = useCallback(async (maxResults = 100) => {
     setLoading(true);
     setError(null);
     try {

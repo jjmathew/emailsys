@@ -8,7 +8,7 @@ const router = Router();
 
 router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
-    const maxResults = parseInt(req.query.maxResults as string) || 30;
+    const maxResults = parseInt(req.query.maxResults as string) || 100;
     const oauth2Client = (req as any).oauth2Client;
     const userId: string = (req as any).userId;
 

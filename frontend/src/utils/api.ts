@@ -20,7 +20,7 @@ export async function logout(): Promise<void> {
   await api.post('/auth/logout');
 }
 
-export async function fetchEmails(maxResults = 30): Promise<Email[]> {
+export async function fetchEmails(maxResults = 100): Promise<Email[]> {
   const response = await api.get(`/emails?maxResults=${maxResults}`);
   return response.data.emails;
 }
