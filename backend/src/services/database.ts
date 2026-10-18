@@ -37,6 +37,16 @@ try { db.exec(`ALTER TABLE email_metadata ADD COLUMN action_tag   TEXT NOT NULL 
 // We re-analyze any email where ai_analyzed = 0.
 try { db.exec(`ALTER TABLE email_metadata ADD COLUMN ai_analyzed  INTEGER NOT NULL DEFAULT 0`); } catch {}
 
+// Reset heuristic-categorized emails so they get re-analyzed with current rules.
+// Keeps manually-moved emails (ai_analyzed=1 set by POST /metadata) and synthetics (sent-*).
+db.exec(`
+  UPDATE email_metadata
+  SET ai_analyzed = 0
+  WHERE ai_analyzed = 1
+    AND email_id NOT LIKE 'sent-%'
+    AND (reasoning LIKE 'Auto-categorized%' OR reasoning LIKE 'No bulk%' OR reasoning = 'Sender is in your Google Contacts.')
+`);
+
 // Stores synthetic "sent" emails created when tracking a reply for follow-up.
 // These never exist in Gmail so we persist the full content here.
 db.exec(`

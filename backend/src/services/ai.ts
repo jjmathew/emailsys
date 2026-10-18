@@ -128,24 +128,28 @@ export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<
     };
   }
 
+  // CATEGORY_PROMOTIONS → definitely FYI
+  // CATEGORY_UPDATES → bank alerts, receipts, shipping — keep in Inbox
+  // CATEGORY_SOCIAL/FORUMS → notification spam → FYI
   const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
-  const isUpdate    = labels.includes('CATEGORY_UPDATES');
   const isSocial    = labels.includes('CATEGORY_SOCIAL');
   const isForums    = labels.includes('CATEGORY_FORUMS');
 
-  const isNoReply = /no.?reply|noreply|donotreply|newsletter|marketing|news@|updates@|alerts@|notifications@|info@|digest@|promo@|announce@/i.test(fromEmail);
+  // Only strict no-reply/bulk address prefixes (not info@ — too many legit senders)
+  const isNoReply = /^(no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|digest|promo|promotions|announce)@/i.test(fromEmail);
 
-  const isMarketingSubject = /newsletter|digest|unsubscribe|weekly update|monthly update|round.?up|% off|deal|promo|coupon|limited.time|flash.sale|curated|picked.for.you|recommended.for.you|don.t miss|last.chance|new arrivals|shop now/i.test(subject);
+  // Strong newsletter/promo indicators only — no short words that match personal email
+  const isMarketingSubject = /\bnewsletter\b|\bdigest\b|weekly (update|digest|roundup|round-up)|monthly (update|digest)|flash sale|\bpromo code\b|\bcoupon\b|picked just for you|curated for you|recommended for you|\bunsubscribe\b/i.test(subject);
 
-  const isMarketingSnippet = /unsubscribe|manage.*preferences|view.*browser|opt.out|manage.*subscription/i.test(snippet);
+  // Unsubscribe/preference link in the preview text — very reliable signal
+  const isMarketingSnippet = /unsubscribe|manage your preferences|view in (your )?browser|opt out of/i.test(snippet);
 
   const reasons: string[] = [];
   if (isPromotion)        reasons.push('Gmail: Promotions tab');
-  if (isUpdate)           reasons.push('Gmail: Updates tab');
   if (isSocial)           reasons.push('Gmail: Social tab');
   if (isForums)           reasons.push('Gmail: Forums tab');
   if (isNoReply)          reasons.push('bulk/no-reply sender');
-  if (isMarketingSubject) reasons.push('marketing subject keywords');
+  if (isMarketingSubject) reasons.push('newsletter/marketing subject');
   if (isMarketingSnippet) reasons.push('contains unsubscribe link');
 
   if (reasons.length > 0) {
