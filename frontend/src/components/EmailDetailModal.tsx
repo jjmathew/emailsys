@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Email } from '../types';
 import { PriorityBadge, ActionTagBadge } from './PriorityBadge';
 import { formatEmailDate } from '../utils/emailUtils';
-import { X, Lightbulb, AlignJustify, Reply, ReplyAll, Forward } from 'lucide-react';
+import { X, Lightbulb, AlignJustify, Reply, ReplyAll, Forward, CheckCircle } from 'lucide-react';
 import { ComposeModal } from './ComposeModal';
 import { archiveEmail, saveSyntheticEmail } from '../utils/api';
 import toast from 'react-hot-toast';
@@ -48,6 +48,20 @@ interface EmailDetailModalProps {
 export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, onRemove, fromEmail }: EmailDetailModalProps) {
   const [iframeHeight, setIframeHeight] = useState(300);
   const [composeMode, setComposeMode] = useState<ComposeMode | null>(null);
+  const [archiving, setArchiving] = useState(false);
+
+  async function handleDone() {
+    setArchiving(true);
+    try {
+      await archiveEmail(email.id);
+      onRemove(email.id);
+      onClose();
+      toast.success('Done — email archived');
+    } catch {
+      toast.error('Failed to archive email');
+      setArchiving(false);
+    }
+  }
 
   const analysis = email.analysis;
 
@@ -184,12 +198,22 @@ export function EmailDetailModal({ email, onClose, onMove: _onMove, onAddEmail, 
                 Forward
               </button>
             </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDone}
+                disabled={archiving}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Done
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>
