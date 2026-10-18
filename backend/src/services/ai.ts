@@ -113,9 +113,11 @@ export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<
   const subject   = (email.subject   || '').toLowerCase();
   const fromEmail = (email.fromEmail || '').toLowerCase();
   const snippet   = (email.snippet   || '').toLowerCase();
+  // Check first 15KB of body — enough to find unsubscribe links without full parse
+  const bodyHead  = (email.body || '').toLowerCase().substring(0, 15000);
   const labels: string[] = email.labels || [];
 
-  // Contacts override — if the sender is in the user's Google Contacts, always Inbox
+  // Contacts override — sender in Google Contacts always lands in Inbox
   if (contactEmails && contactEmails.size > 0 && contactEmails.has(fromEmail)) {
     return {
       emailId: email.id,
@@ -128,29 +130,34 @@ export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<
     };
   }
 
-  // CATEGORY_PROMOTIONS → definitely FYI
-  // CATEGORY_UPDATES → bank alerts, receipts, shipping — keep in Inbox
-  // CATEGORY_SOCIAL/FORUMS → notification spam → FYI
+  // Gmail label signals
+  // CATEGORY_PROMOTIONS = promotional mail → FYI
+  // CATEGORY_SOCIAL/FORUMS = bulk notifications → FYI
+  // CATEGORY_UPDATES = receipts/alerts — left out; too many transactional emails there
   const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
   const isSocial    = labels.includes('CATEGORY_SOCIAL');
   const isForums    = labels.includes('CATEGORY_FORUMS');
 
-  // Only strict no-reply/bulk address prefixes (not info@ — too many legit senders)
-  const isNoReply = /^(no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|digest|promo|promotions|announce)@/i.test(fromEmail);
+  // Bulk/no-reply sender prefix (before the @)
+  const isNoReply = /^(no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|digest|promo|promotions|announce|hello|hi|news|weekly|daily)@/i.test(fromEmail);
 
-  // Strong newsletter/promo indicators only — no short words that match personal email
-  const isMarketingSubject = /\bnewsletter\b|\bdigest\b|weekly (update|digest|roundup|round-up)|monthly (update|digest)|flash sale|\bpromo code\b|\bcoupon\b|picked just for you|curated for you|recommended for you|\bunsubscribe\b/i.test(subject);
+  // Subject patterns for newsletters/marketing
+  // "Weekly" and "Daily" alone are reliable newsletter signals (Weekly Warmup, Daily Digest, etc.)
+  const isMarketingSubject = /\bnewsletter\b|\bdigest\b|\bweekly\b|\bdaily\b|monthly (update|digest|roundup)|flash sale|\bpromo code\b|\bcoupon\b|picked just for you|curated for you|recommended for you|\bunsubscribe\b/i.test(subject);
 
-  // Unsubscribe/preference link in the preview text — very reliable signal
-  const isMarketingSnippet = /unsubscribe|manage your preferences|view in (your )?browser|opt out of/i.test(snippet);
+  // Unsubscribe/preference links in body — the single most reliable newsletter signal.
+  // Newsletters always have them; transactional and personal emails never do.
+  const hasUnsubscribeInBody = /unsubscribe|opt.out|manage (your )?preferences|manage (your )?subscription|update (your )?preferences|view (this |in )?(your )?browser/i.test(bodyHead);
+  const hasUnsubscribeInSnippet = /unsubscribe|manage.*preferences|view.*browser|opt out of/i.test(snippet);
+  const isUnsubscribable = hasUnsubscribeInBody || hasUnsubscribeInSnippet;
 
   const reasons: string[] = [];
-  if (isPromotion)        reasons.push('Gmail: Promotions tab');
-  if (isSocial)           reasons.push('Gmail: Social tab');
-  if (isForums)           reasons.push('Gmail: Forums tab');
-  if (isNoReply)          reasons.push('bulk/no-reply sender');
+  if (isPromotion)       reasons.push('Gmail: Promotions tab');
+  if (isSocial)          reasons.push('Gmail: Social tab');
+  if (isForums)          reasons.push('Gmail: Forums tab');
+  if (isNoReply)         reasons.push('bulk/no-reply sender');
   if (isMarketingSubject) reasons.push('newsletter/marketing subject');
-  if (isMarketingSnippet) reasons.push('contains unsubscribe link');
+  if (isUnsubscribable)  reasons.push('contains unsubscribe link');
 
   if (reasons.length > 0) {
     return {
