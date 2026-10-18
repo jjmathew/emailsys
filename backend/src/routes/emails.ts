@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../middleware/auth';
 import { fetchEmails, sendEmail, markAsRead, archiveEmail, trashEmail, reportSpam } from '../services/gmail';
-import { generateReply } from '../services/ai';
+import { generateReply, analyzeEmailBatch } from '../services/ai';
 import { getBulkEmailMetadata, upsertEmailMetadata, deleteEmailMetadata, upsertSyntheticEmail, getSyntheticEmails, deleteSyntheticEmail } from '../services/database';
 
 const router = Router();
@@ -15,6 +15,30 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     const emails = await fetchEmails(oauth2Client, maxResults);
     const metaMap = getBulkEmailMetadata(userId);
 
+    // Analyze emails that haven't been seen before, then persist so they're remembered
+    const newEmails = emails.filter((email) => !metaMap.has(email.id));
+    if (newEmails.length > 0) {
+      const analyses = await analyzeEmailBatch(newEmails);
+      for (const analysis of analyses) {
+        upsertEmailMetadata(userId, analysis.emailId, {
+          category: analysis.category,
+          priority: analysis.priority,
+          dueDate: analysis.dueDate,
+          suggestion: analysis.suggestion,
+          reasoning: analysis.reasoning,
+          actionTag: analysis.actionTag,
+        });
+        metaMap.set(analysis.emailId, {
+          category: analysis.category,
+          priority: analysis.priority,
+          dueDate: analysis.dueDate,
+          suggestion: analysis.suggestion,
+          reasoning: analysis.reasoning,
+          actionTag: analysis.actionTag,
+        });
+      }
+    }
+
     const enrichedEmails = emails.map((email) => {
       const meta = metaMap.get(email.id);
       return {
@@ -24,10 +48,10 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
               emailId: email.id,
               category: meta.category,
               priority: meta.priority ?? 'Medium',
-              actionTag: 'Needs Response',
-              suggestion: '',
+              actionTag: meta.actionTag ?? 'Needs Response',
+              suggestion: meta.suggestion ?? '',
               dueDate: meta.dueDate,
-              reasoning: '',
+              reasoning: meta.reasoning ?? '',
             }
           : null,
       };

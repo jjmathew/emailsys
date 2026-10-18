@@ -18,15 +18,20 @@ db.pragma('journal_mode = WAL');
 // Create the metadata table once on startup
 db.exec(`
   CREATE TABLE IF NOT EXISTS email_metadata (
-    user_id   TEXT NOT NULL,
-    email_id  TEXT NOT NULL,
-    category  TEXT NOT NULL DEFAULT 'Inbox',
-    priority  TEXT,
-    due_date  TEXT,
+    user_id    TEXT NOT NULL,
+    email_id   TEXT NOT NULL,
+    category   TEXT NOT NULL DEFAULT 'Inbox',
+    priority   TEXT,
+    due_date   TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, email_id)
   )
 `);
+
+// Migrate: add AI analysis columns if they don't exist yet
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN suggestion  TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN reasoning   TEXT NOT NULL DEFAULT ''`); } catch {}
+try { db.exec(`ALTER TABLE email_metadata ADD COLUMN action_tag  TEXT NOT NULL DEFAULT 'Needs Response'`); } catch {}
 
 // Stores synthetic "sent" emails created when tracking a reply for follow-up.
 // These never exist in Gmail so we persist the full content here.
@@ -51,23 +56,29 @@ export interface EmailMetadata {
   category: string;
   priority: string | null;
   dueDate: string | null;
+  suggestion: string;
+  reasoning: string;
+  actionTag: string;
 }
 
 const getStmt = db.prepare<[string, string]>(
-  'SELECT category, priority, due_date FROM email_metadata WHERE user_id = ? AND email_id = ?'
+  'SELECT category, priority, due_date, suggestion, reasoning, action_tag FROM email_metadata WHERE user_id = ? AND email_id = ?'
 );
 
 const getBulkStmt = db.prepare<[string]>(
-  'SELECT email_id, category, priority, due_date FROM email_metadata WHERE user_id = ?'
+  'SELECT email_id, category, priority, due_date, suggestion, reasoning, action_tag FROM email_metadata WHERE user_id = ?'
 );
 
-const upsertStmt = db.prepare<[string, string, string, string | null, string | null]>(`
-  INSERT INTO email_metadata (user_id, email_id, category, priority, due_date, updated_at)
-  VALUES (?, ?, ?, ?, ?, datetime('now'))
+const upsertStmt = db.prepare<[string, string, string, string | null, string | null, string, string, string]>(`
+  INSERT INTO email_metadata (user_id, email_id, category, priority, due_date, suggestion, reasoning, action_tag, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   ON CONFLICT (user_id, email_id) DO UPDATE SET
     category   = excluded.category,
     priority   = excluded.priority,
     due_date   = excluded.due_date,
+    suggestion = excluded.suggestion,
+    reasoning  = excluded.reasoning,
+    action_tag = excluded.action_tag,
     updated_at = excluded.updated_at
 `);
 
@@ -78,7 +89,7 @@ const deleteStmt = db.prepare<[string, string]>(
 export function getEmailMetadata(userId: string, emailId: string): EmailMetadata | null {
   const row = getStmt.get(userId, emailId) as any;
   if (!row) return null;
-  return { category: row.category, priority: row.priority, dueDate: row.due_date };
+  return { category: row.category, priority: row.priority, dueDate: row.due_date, suggestion: row.suggestion ?? '', reasoning: row.reasoning ?? '', actionTag: row.action_tag ?? 'Needs Response' };
 }
 
 /** Returns a map of emailId → metadata for all emails belonging to this user. */
@@ -86,7 +97,7 @@ export function getBulkEmailMetadata(userId: string): Map<string, EmailMetadata>
   const rows = getBulkStmt.all(userId) as any[];
   const map = new Map<string, EmailMetadata>();
   for (const row of rows) {
-    map.set(row.email_id, { category: row.category, priority: row.priority, dueDate: row.due_date });
+    map.set(row.email_id, { category: row.category, priority: row.priority, dueDate: row.due_date, suggestion: row.suggestion ?? '', reasoning: row.reasoning ?? '', actionTag: row.action_tag ?? 'Needs Response' });
   }
   return map;
 }
@@ -102,7 +113,10 @@ export function upsertEmailMetadata(
     emailId,
     data.category ?? existing?.category ?? 'Inbox',
     data.priority !== undefined ? data.priority : (existing?.priority ?? null),
-    data.dueDate !== undefined ? data.dueDate : (existing?.dueDate ?? null)
+    data.dueDate !== undefined ? data.dueDate : (existing?.dueDate ?? null),
+    data.suggestion !== undefined ? data.suggestion : (existing?.suggestion ?? ''),
+    data.reasoning !== undefined ? data.reasoning : (existing?.reasoning ?? ''),
+    data.actionTag !== undefined ? data.actionTag : (existing?.actionTag ?? 'Needs Response')
   );
 }
 
