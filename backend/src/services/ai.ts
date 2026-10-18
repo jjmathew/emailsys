@@ -131,21 +131,86 @@ Respond ONLY with the JSON object, no additional text.`;
   }
 }
 
+/** Local, zero-cost categorizer using Gmail labels + subject/sender heuristics. */
+export function categorizeEmailLocally(email: EmailMessage): EmailAnalysis {
+  const subject = (email.subject || '').toLowerCase();
+  const fromEmail = (email.fromEmail || '').toLowerCase();
+  const snippet = (email.snippet || '').toLowerCase();
+  const labels: string[] = email.labels || [];
+
+  // Gmail's own tab categorization — most reliable signal
+  const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
+  const isUpdate    = labels.includes('CATEGORY_UPDATES');
+  const isSocial    = labels.includes('CATEGORY_SOCIAL');
+  const isForums    = labels.includes('CATEGORY_FORUMS');
+
+  // Bulk/no-reply sender address patterns
+  const isNoReply = /no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|news@|updates@|alerts@|notifications@|info@|digest@|promo@|announce@/i.test(fromEmail);
+
+  // Subject keywords indicating bulk mail
+  const isMarketingSubject = /newsletter|digest|unsubscribe|weekly update|monthly update|round.?up|sale|% off|\boff\b|deal|promo|coupon|limited.time|flash.sale|curated|picked.for.you|based.on.your|recommended.for.you|don.t miss|last.chance|today only|new arrivals|shop now|spring|summer|fall|winter|season/i.test(subject);
+
+  // Body/snippet signals
+  const isMarketingSnippet = /unsubscribe|manage.*preferences|view.*browser|opt.out|manage.*subscription|update.*preferences/i.test(snippet);
+
+  const reasons: string[] = [];
+  if (isPromotion)         reasons.push('Gmail: Promotions tab');
+  if (isUpdate)            reasons.push('Gmail: Updates tab');
+  if (isSocial)            reasons.push('Gmail: Social tab');
+  if (isForums)            reasons.push('Gmail: Forums tab');
+  if (isNoReply)           reasons.push('bulk/no-reply sender');
+  if (isMarketingSubject)  reasons.push('marketing subject keywords');
+  if (isMarketingSnippet)  reasons.push('contains unsubscribe/preference link');
+
+  if (reasons.length > 0) {
+    return {
+      emailId: email.id,
+      category: 'FYI',
+      priority: 'Low',
+      actionTag: 'FYI',
+      suggestion: 'Newsletter or marketing email — no action needed.',
+      dueDate: null,
+      reasoning: `Auto-categorized as FYI (${reasons.join('; ')}).`,
+    };
+  }
+
+  return {
+    emailId: email.id,
+    category: 'Inbox',
+    priority: 'Medium',
+    actionTag: 'Needs Response',
+    suggestion: 'Review this email and determine the appropriate action.',
+    dueDate: null,
+    reasoning: 'No bulk/marketing signals detected — placed in Inbox for review.',
+  };
+}
+
 export async function analyzeEmailBatch(emails: EmailMessage[]): Promise<EmailAnalysis[]> {
   const currentDate = new Date().toISOString();
   const analyses = await Promise.all(
-    emails.map((email) => analyzeEmail(email, currentDate).catch((err) => {
-      console.error(`[ai] Failed to analyze email ${email.id} ("${email.subject}"): ${err?.message || err}`);
-      return {
-        emailId: email.id,
-        category: 'Inbox' as EmailCategory,
-        priority: 'Low' as Priority,
-        actionTag: 'FYI' as ActionTag,
-        suggestion: '',  // intentionally empty — signals "not successfully analyzed"
-        dueDate: null,
-        reasoning: '',
-      };
-    }))
+    emails.map(async (email) => {
+      // Always run local heuristics first — free and instant
+      const local = categorizeEmailLocally(email);
+
+      // If already identified as FYI locally, skip the AI call entirely
+      if (local.category === 'FYI') {
+        return local;
+      }
+
+      // For non-FYI emails, try AI for richer categorization and suggestions
+      try {
+        return await analyzeEmail(email, currentDate);
+      } catch (err: any) {
+        const msg: string = err?.message || String(err);
+        // On billing/credit errors log once; other errors log the full message
+        if (msg.includes('credit balance') || msg.includes('billing')) {
+          console.error(`[ai] API billing error — falling back to heuristics for all remaining emails`);
+        } else {
+          console.error(`[ai] Failed to analyze email ${email.id} ("${email.subject}"): ${msg}`);
+        }
+        return local; // heuristic result is still useful
+      }
+    })
   );
   return analyses;
 }
