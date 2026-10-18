@@ -117,7 +117,7 @@ export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<
   const bodyHead  = (email.body || '').toLowerCase().substring(0, 15000);
   const labels: string[] = email.labels || [];
 
-  // Contacts override — sender in Google Contacts always lands in Inbox
+  // ── 1. Contacts override ────────────────────────────────────────────────────
   if (contactEmails && contactEmails.size > 0 && contactEmails.has(fromEmail)) {
     return {
       emailId: email.id,
@@ -130,34 +130,51 @@ export function categorizeEmailLocally(email: EmailMessage, contactEmails?: Set<
     };
   }
 
+  // ── 2. Important subject override — always Inbox even if bulk signals present ──
+  // Catches job offers, interviews, security alerts sent by bulk platforms
+  const isImportantSubject = /\bjob offer\b|\bjob opportunity\b|\binterview\b|\boffer letter\b|\bwe.d like to\b|\byou.ve been selected\b|\bsecurity alert\b|\bsign.in\b|\bnew sign.?in\b|\bpassword\b|\binvoice\b|\breceipt\b|\bpayment\b|\bappointment\b|\bconfirmation\b/i.test(subject);
+  if (isImportantSubject) {
+    return {
+      emailId: email.id,
+      category: 'Inbox',
+      priority: 'Medium',
+      actionTag: 'Needs Response',
+      suggestion: 'Review this email and determine the appropriate action.',
+      dueDate: null,
+      reasoning: 'Important subject keyword — kept in Inbox.',
+    };
+  }
+
+  // ── 3. FYI signals ──────────────────────────────────────────────────────────
+
   // Gmail label signals
-  // CATEGORY_PROMOTIONS = promotional mail → FYI
-  // CATEGORY_SOCIAL/FORUMS = bulk notifications → FYI
-  // CATEGORY_UPDATES = receipts/alerts — left out; too many transactional emails there
   const isPromotion = labels.includes('CATEGORY_PROMOTIONS');
   const isSocial    = labels.includes('CATEGORY_SOCIAL');
   const isForums    = labels.includes('CATEGORY_FORUMS');
 
   // Bulk/no-reply sender prefix (before the @)
-  const isNoReply = /^(no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|digest|promo|promotions|announce|hello|hi|news|weekly|daily)@/i.test(fromEmail);
+  const isNoReply = /^(no.?reply|noreply|donotreply|do.not.reply|newsletter|marketing|digest|promo|promotions|announce|news|weekly|daily)@/i.test(fromEmail);
 
-  // Subject patterns for newsletters/marketing
-  // "Weekly" and "Daily" alone are reliable newsletter signals (Weekly Warmup, Daily Digest, etc.)
+  // Subject patterns — "Weekly" and "Daily" are strong newsletter signals
   const isMarketingSubject = /\bnewsletter\b|\bdigest\b|\bweekly\b|\bdaily\b|monthly (update|digest|roundup)|flash sale|\bpromo code\b|\bcoupon\b|picked just for you|curated for you|recommended for you|\bunsubscribe\b/i.test(subject);
 
-  // Unsubscribe/preference links in body — the single most reliable newsletter signal.
-  // Newsletters always have them; transactional and personal emails never do.
-  const hasUnsubscribeInBody = /unsubscribe|opt.out|manage (your )?preferences|manage (your )?subscription|update (your )?preferences|view (this |in )?(your )?browser/i.test(bodyHead);
+  // Unsubscribe/opt-out links in body — the most reliable newsletter signal.
+  // Every newsletter has them; transactional and personal emails don't.
+  const hasUnsubscribeInBody    = /unsubscribe|opt.out|manage (your )?preferences|manage (your )?subscription|update (your )?preferences|view (this |in )?(your )?browser/i.test(bodyHead);
   const hasUnsubscribeInSnippet = /unsubscribe|manage.*preferences|view.*browser|opt out of/i.test(snippet);
   const isUnsubscribable = hasUnsubscribeInBody || hasUnsubscribeInSnippet;
 
+  // Google Calendar "no events" notifications — not worth inbox space
+  const isCalendarNoise = /google calendar|you have no events/i.test(snippet + ' ' + subject);
+
   const reasons: string[] = [];
-  if (isPromotion)       reasons.push('Gmail: Promotions tab');
-  if (isSocial)          reasons.push('Gmail: Social tab');
-  if (isForums)          reasons.push('Gmail: Forums tab');
-  if (isNoReply)         reasons.push('bulk/no-reply sender');
+  if (isPromotion)        reasons.push('Gmail: Promotions tab');
+  if (isSocial)           reasons.push('Gmail: Social tab');
+  if (isForums)           reasons.push('Gmail: Forums tab');
+  if (isNoReply)          reasons.push('bulk/no-reply sender');
   if (isMarketingSubject) reasons.push('newsletter/marketing subject');
-  if (isUnsubscribable)  reasons.push('contains unsubscribe link');
+  if (isUnsubscribable)   reasons.push('contains unsubscribe link');
+  if (isCalendarNoise)    reasons.push('Google Calendar noise notification');
 
   if (reasons.length > 0) {
     return {

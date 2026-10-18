@@ -37,16 +37,18 @@ try { db.exec(`ALTER TABLE email_metadata ADD COLUMN action_tag   TEXT NOT NULL 
 // We re-analyze any email where ai_analyzed = 0.
 try { db.exec(`ALTER TABLE email_metadata ADD COLUMN ai_analyzed  INTEGER NOT NULL DEFAULT 0`); } catch {}
 
-// Reset heuristic-categorized emails so they re-run with updated rules.
-// Keeps synthetic sent emails (sent-*) intact.
-// reasoning column identifies auto-categorized rows vs manual moves.
+// Reset all auto-categorized emails so they re-run with current heuristic rules.
+// Includes rows with empty reasoning (old broken AI attempts) and all heuristic results.
+// Synthetic sent emails (sent-*) are preserved.
 db.exec(`
   UPDATE email_metadata
   SET ai_analyzed = 0
   WHERE email_id NOT LIKE 'sent-%'
-    AND (reasoning LIKE 'Auto-categorized%'
+    AND (reasoning = ''
+      OR reasoning LIKE 'Auto-categorized%'
       OR reasoning LIKE 'No bulk%'
-      OR reasoning = 'Sender is in your Google Contacts.')
+      OR reasoning = 'Sender is in your Google Contacts.'
+      OR reasoning LIKE 'Default%')
 `);
 
 // Stores synthetic "sent" emails created when tracking a reply for follow-up.
